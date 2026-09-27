@@ -77,8 +77,12 @@ func buildSessionWhere(f SessionFilter) (string, []any) {
 	return where, args
 }
 
+// sessionSelect is the SELECT column list shared by ListSessions/PageSessions/
+// GetSession. COALESCE keeps the NULL-able c.code scannable into a plain string
+// (same rationale as nullableCode in store.go); the column order matches
+// scanSessionView.
 const sessionSelect = `SELECT s.id, s.offering_id, s.classroom_id, s.date, s.period_start, s.period_end, s.note, s.created_at,
-       c.name, c.code, tc.name, o.teacher, o.semester, cr.name `
+       c.name, COALESCE(c.code, ''), tc.name, o.teacher, o.semester, cr.name `
 
 // ListSessions returns sessions matching the given filters. Zero values are
 // ignored (no filter on that field).
@@ -158,8 +162,7 @@ func (s *Store) PageSessions(ctx context.Context, f SessionFilter, p dbutil.Pagi
 }
 
 func (s *Store) GetSession(ctx context.Context, id int64) (SessionView, error) {
-	q := `SELECT s.id, s.offering_id, s.classroom_id, s.date, s.period_start, s.period_end, s.note, s.created_at,
-       c.name, c.code, tc.name, o.teacher, o.semester, cr.name ` + sessionJoin + ` WHERE s.id = ?`
+	q := sessionSelect + sessionJoin + ` WHERE s.id = ?`
 	var v SessionView
 	var date time.Time
 	err := s.db.QueryRowContext(ctx, q, id).Scan(

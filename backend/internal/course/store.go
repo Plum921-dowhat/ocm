@@ -33,8 +33,9 @@ func NewStore(db *sql.DB) *Store {
 
 // nullableCode returns nil for an empty code so the column stores NULL (not ”).
 // Multiple NULLs are distinct under UNIQUE(code); multiple ” would collide.
-// Callers that read the value back get "" either way (NULL scans to the zero
-// string), so the empty-means-uncoded convention is preserved on read.
+// Read side: every SELECT that scans code wraps it in COALESCE(code, ”),
+// because database/sql cannot scan NULL into a plain string (it errors with
+// "converting NULL to string is unsupported").
 func nullableCode(code string) interface{} {
 	if code == "" {
 		return nil
@@ -109,7 +110,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 
 func (s *Store) ListCatalog(ctx context.Context) ([]CatalogCourse, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, code, credits, total_hours, category, exam_type, description, created_at FROM course_catalog ORDER BY id`)
+		`SELECT id, name, COALESCE(code, ''), credits, total_hours, category, exam_type, description, created_at FROM course_catalog ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list catalog: %w", err)
 	}
@@ -138,7 +139,7 @@ func (s *Store) PageCatalog(ctx context.Context, q string, p dbutil.Pagination) 
 		args = append(args, pat, pat)
 	}
 	query, queryArgs := p.AppendLimit(
-		`SELECT id, name, code, credits, total_hours, category, exam_type, description, created_at FROM course_catalog`+
+		`SELECT id, name, COALESCE(code, ''), credits, total_hours, category, exam_type, description, created_at FROM course_catalog`+
 			where+` ORDER BY id`, args)
 	rows, err := s.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
@@ -167,7 +168,7 @@ func (s *Store) PageCatalog(ctx context.Context, q string, p dbutil.Pagination) 
 func (s *Store) GetCatalog(ctx context.Context, id int64) (CatalogCourse, error) {
 	var c CatalogCourse
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, code, credits, total_hours, category, exam_type, description, created_at FROM course_catalog WHERE id = ?`, id,
+		`SELECT id, name, COALESCE(code, ''), credits, total_hours, category, exam_type, description, created_at FROM course_catalog WHERE id = ?`, id,
 	).Scan(&c.ID, &c.Name, &c.Code, &c.Credits, &c.TotalHours, &c.Category, &c.ExamType, &c.Description, &c.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CatalogCourse{}, ErrCatalogNotFound
@@ -247,13 +248,8 @@ func (s *Store) DeleteCatalog(ctx context.Context, id int64) error {
 // ---- Offerings ----
 
 func (s *Store) ListOfferings(ctx context.Context) ([]OfferingView, error) {
-	rows, err := s.db.QueryContext(ctx, `
-SELECT o.id, o.catalog_id, o.teaching_class_id, o.teacher, o.course_seq, o.teacher_id, o.teacher_title, o.college, o.max_students, o.requirement, o.weekly_hours, o.semester, o.note, o.created_at,
-       c.name, c.code, tc.name
-FROM course_offerings o
-JOIN course_catalog c ON c.id = o.catalog_id
-JOIN teaching_classes tc ON tc.id = o.teaching_class_id
-ORDER BY o.semester DESC, tc.name, c.name`)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+offeringColumns+offeringJoin+` ORDER BY o.semester DESC, tc.name, c.name`)
 	if err != nil {
 		return nil, fmt.Errorf("list offerings: %w", err)
 	}
@@ -289,10 +285,11 @@ ORDER BY o.semester DESC, tc.name, c.name`)
 }
 
 // offeringColumns + offeringJoin are the SELECT column list and JOIN chain for
-// offering views, used by the paged query. The column order matches the scan
-// order in ListOfferings/PageOfferings (17 columns).
+// offering views, shared by ListOfferings/PageOfferings/GetOffering so the
+// column order (17 columns) and the COALESCE on the NULL-able c.code cannot
+// drift between them (see nullableCode).
 const offeringColumns = `o.id, o.catalog_id, o.teaching_class_id, o.teacher, o.course_seq, o.teacher_id, o.teacher_title, o.college, o.max_students, o.requirement, o.weekly_hours, o.semester, o.note, o.created_at,
-       c.name, c.code, tc.name`
+       c.name, COALESCE(c.code, ''), tc.name`
 
 const offeringJoin = `
 FROM course_offerings o
@@ -354,13 +351,8 @@ func (s *Store) PageOfferings(ctx context.Context, q string, p dbutil.Pagination
 
 func (s *Store) GetOffering(ctx context.Context, id int64) (OfferingView, error) {
 	var v OfferingView
-	err := s.db.QueryRowContext(ctx, `
-SELECT o.id, o.catalog_id, o.teaching_class_id, o.teacher, o.course_seq, o.teacher_id, o.teacher_title, o.college, o.max_students, o.requirement, o.weekly_hours, o.semester, o.note, o.created_at,
-       c.name, c.code, tc.name
-FROM course_offerings o
-JOIN course_catalog c ON c.id = o.catalog_id
-JOIN teaching_classes tc ON tc.id = o.teaching_class_id
-WHERE o.id = ?`, id,
+	err := s.db.QueryRowContext(ctx,
+		`SELECT `+offeringColumns+offeringJoin+` WHERE o.id = ?`, id,
 	).Scan(
 		&v.ID, &v.CatalogID, &v.TeachingClassID, &v.Teacher, &v.CourseSeq, &v.TeacherID, &v.TeacherTitle, &v.College, &v.MaxStudents, &v.Requirement, &v.WeeklyHours, &v.Semester, &v.Note, &v.CreatedAt,
 		&v.CatalogName, &v.CatalogCode, &v.TeachingClassName,

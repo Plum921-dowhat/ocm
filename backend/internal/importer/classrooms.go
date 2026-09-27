@@ -44,10 +44,13 @@ func (i *ClassroomsImporter) Commit(ctx context.Context, payload string) (Result
 type classroomRow struct {
 	classroom.ClassroomInput
 	rowNum int
+	srcRow int // 拆分器透传的源表行号（手工上传为 0，预览不显示）
 }
 
 func (r classroomRow) toPreviewMap() map[string]any {
 	return map[string]any{
+		"rowNum":      r.rowNum,
+		"sourceRow":   r.srcRow,
 		"name":        r.Name,
 		"building":    r.Building,
 		"capacity":    r.Capacity,
@@ -68,9 +71,12 @@ func parseClassrooms(payload string) (clean []classroomRow, errs []RowError, dat
 		return nil, []RowError{rerr}, 1, fmt.Errorf("%s", rerr.Error)
 	}
 
+	srcByRow := map[int]int{}
 	for i, rec := range rows {
 		rowNum := i + 2
 		dataRows++
+		srcRow := atoiOr(rec[ColSourceRow], 0)
+		srcByRow[rowNum] = srcRow
 		in := classroom.ClassroomInput{
 			Name:        rec[ColClassroomName],
 			Building:    rec[ColClassroomBuilding],
@@ -85,8 +91,9 @@ func parseClassrooms(payload string) (clean []classroomRow, errs []RowError, dat
 			errs = append(errs, RowError{Row: rowNum, Error: msg})
 			continue
 		}
-		clean = append(clean, classroomRow{ClassroomInput: in, rowNum: rowNum})
+		clean = append(clean, classroomRow{ClassroomInput: in, rowNum: rowNum, srcRow: srcRow})
 	}
+	attachSourceRow(errs, srcByRow)
 	return clean, errs, dataRows, nil
 }
 

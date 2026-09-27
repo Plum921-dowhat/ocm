@@ -58,6 +58,7 @@ func (r regimeInsert) toPreviewMap() map[string]any {
 		})
 	}
 	return map[string]any{
+		"rowNum":         r.rowNum,
 		"name":           r.name,
 		"effectiveMonth": r.month,
 		"effectiveDay":   r.day,

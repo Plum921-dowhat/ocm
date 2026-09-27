@@ -96,6 +96,7 @@ type bookingInsert struct {
 
 func (b bookingInsert) toPreviewMap() map[string]any {
 	return map[string]any{
+		"rowNum":      b.rowNum,
 		"classroom":   b.classroomName,
 		"username":    b.username,
 		"date":        b.date,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { InlineNotification } from '@carbon/react'
 import type { TFunction } from 'i18next'
 import ListPagination from './ListPagination'
 import { apiFetch } from '../auth/api'
@@ -78,6 +79,13 @@ export interface ImportPreviewTableProps {
   t: TFunction
 }
 
+// jobKey derives the preview "version" of a job: any change to identity,
+// status or row counts (reanalyze bumps startedAt/succeededRows, commit
+// changes status) produces a new key, so stale rows are never rendered
+// across a reanalyze of the same job id.
+const jobKey = (j: ImportJob | null | undefined) =>
+  j ? `${j.id}:${j.status}:${j.startedAt ?? ''}:${j.succeededRows ?? ''}` : ''
+
 // ImportPreviewTable renders the dry-run rows for one job, fetching pages from
 // the server (GET /api/imports/{id}/rows) so a multi-thousand-row preview is
 // not shipped in full. `job` is the job metadata (status / counts) and carries
@@ -92,15 +100,36 @@ export default function ImportPreviewTable({ job, token, t }: ImportPreviewTable
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [rowsJobKey, setRowsJobKey] = useState('') // rows 所属 job 版本键：与当前 key 不一致时不渲染旧数据
+  const [fetchFailed, setFetchFailed] = useState(false)
   const [errors, setErrors] = useState<ImportRowError[]>([])
   const [errorsLoaded, setErrorsLoaded] = useState(false)
 
-  const columns = (job && IMPORT_TYPES[job.type]?.columns ? IMPORT_TYPES[job.type]!.columns : [])
-    .map((key) => ({ key, header: t(`columns.${job?.type}.${key}`, { defaultValue: key }) }))
+  // 合成列：行号在最前（与错误报告「第 N 行」同一坐标系——均为源 xlsx 的
+  // Excel 行号，表头为第 1 行），六个拆分产物类型额外渲染拆分器透传的源表
+  // 行号（教务处原始文件 Excel 行号，手工上传缺失/0 显示空）。旧任务的预览行
+  // 没有这些键，渲染为空，自然降级。列头走 columns.common.*，不进 IMPORT_TYPES
+  // 的按类型契约。key 必须与后端 toPreviewMap 输出的键名一致
+  // （rowNum/sourceRow，无下划线），否则取值恒为 undefined、单元格全空。
+  const SOURCE_ROW_TYPES = ['sessions', 'classrooms', 'catalog', 'admin_classes', 'teaching_classes', 'offerings']
+  const showSourceRow = !!job?.type && SOURCE_ROW_TYPES.includes(job.type)
+  const columns = [
+    { key: 'rowNum', header: t('columns.common.rowNum', { defaultValue: '行号' }) },
+    ...(showSourceRow ? [{ key: 'sourceRow', header: t('columns.common.sourceRow', { defaultValue: '源表行号' }) }] : []),
+    ...(job && IMPORT_TYPES[job.type]?.columns ? IMPORT_TYPES[job.type]!.columns : [])
+      .map((key) => ({ key, header: t(`columns.${job?.type}.${key}`, { defaultValue: key }) })),
+  ]
 
   useEffect(() => {
     if (!job?.id) return undefined
     let cancelled = false
+    setFetchFailed(false) // 每次发起请求前重置失败态
+    if (job.status === 'processing') {
+      // 重分析期间清掉旧预览与旧错误，避免展示已被重新处理覆盖的数据。
+      setRows([])
+      setTotal(0)
+      setErrors([])
+    }
     setLoading(true)
     ;(async () => {
       try {
@@ -113,6 +142,10 @@ export default function ImportPreviewTable({ job, token, t }: ImportPreviewTable
         const nextTotal = data?.total ?? 0
         setRows(nextRows)
         setTotal(nextTotal)
+        setFetchFailed(false)
+        // 仅在成功后盖章：发起请求时的 key 与返回数据严格对应；失败不盖章，
+        // rowsJobKey 保持旧值并展示明确的错误通知而非“无数据”。
+        setRowsJobKey(jobKey(job))
         // If the current page is out of range (e.g. switched to a smaller job
         // while on page > 1, or a reanalyze shrank the preview), jump back to
         // page 1 so the operator isn't staring at an empty table.
@@ -123,25 +156,33 @@ export default function ImportPreviewTable({ job, token, t }: ImportPreviewTable
         if (!cancelled) {
           setRows([])
           setTotal(0)
+          setFetchFailed(true)
         }
       } finally {
         if (!cancelled) setLoading(false)
       }
     })()
     return () => { cancelled = true }
-    // Re-fetch when the job identity or its preview "version" changes (reanalyze
-    // bumps startedAt/succeededRows; commit changes status), or on page change.
-    // Polled meta during processing keeps these primitives stable, so polling
-    // does not refetch rows.
+    // Re-fetch when the job's preview "version" (identity/status/startedAt/
+    // succeededRows via jobKey) changes, or on page change. Polled meta during
+    // processing keeps these primitives stable, so polling does not refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.id, job?.status, job?.succeededRows, job?.startedAt, page, pageSize])
+  }, [jobKey(job), page, pageSize])
 
   // Fetch the per-row error report on demand. error_report can be several MB
   // for a sessions job whose rows all fail, so the polled job meta no longer
   // carries it; fetch it here, refetched only when the preview "version"
-  // changes (same primitives as the rows effect) - never on each meta poll.
+  // (jobKey, same primitives as the rows effect) changes - never on each
+  // meta poll.
   useEffect(() => {
     if (!job?.id) return undefined
+    if (job.status === 'processing') {
+      // 重分析期间 error_report 仍是旧值，清空并短路；转出 processing 后
+      // 本 effect 因依赖变化重新执行，正常拉取新报告。
+      setErrors([])
+      setErrorsLoaded(false)
+      return undefined
+    }
     let cancelled = false
     ;(async () => {
       try {
@@ -156,14 +197,31 @@ export default function ImportPreviewTable({ job, token, t }: ImportPreviewTable
     })()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.id, job?.status, job?.succeededRows, job?.startedAt])
+  }, [jobKey(job)])
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize))
   const safePage = Math.min(page, lastPage)
 
+  const rowsAreCurrent = rowsJobKey === jobKey(job)
+  const emptyTitle = !fetchFailed
+    ? job?.status === 'processing'
+      ? t('modal.loadingPreview')
+      : (job?.failedRows ?? 0) > 0 && (job?.succeededRows ?? 0) === 0
+        ? t('modal.emptyPreviewAllFailed')
+        : t('modal.emptyPreview')
+    : ''
+
   return (
     <>
-      {loading && rows.length === 0 ? (
+      {fetchFailed ? (
+        <InlineNotification
+          kind="error"
+          title={t('modal.previewFetchFailed')}
+          lowContrast
+          hideCloseButton
+          className="imports-page__upload-err"
+        />
+      ) : !rowsAreCurrent || (loading && rows.length === 0) ? (
         <p className="imports-page__summary">{t('modal.loadingPreview')}</p>
       ) : rows.length > 0 ? (
         <div className="imports-page__rows">
@@ -179,14 +237,30 @@ export default function ImportPreviewTable({ job, token, t }: ImportPreviewTable
               {rows.map((r, i) => (
                 <tr key={i}>
                   {columns.map((c) => (
-                    <td key={c.key}>{formatCell(r[c.key])}</td>
+                    <td key={c.key}>
+                      {/* 合成行号列：sourceRow 为 0（手工上传/无溯源信息）显示空；
+                          其余列走通用格式化。 */}
+                      {c.key === 'rowNum'
+                        ? String(r.rowNum ?? '')
+                        : c.key === 'sourceRow'
+                          ? (r.sourceRow ? String(r.sourceRow) : '')
+                          : formatCell(r[c.key])}
+                    </td>
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      ) : null}
+      ) : (
+        <InlineNotification
+          kind="info"
+          title={emptyTitle}
+          lowContrast
+          hideCloseButton
+          className="imports-page__upload-err"
+        />
+      )}
 
       {total > 0 && (
         <ListPagination

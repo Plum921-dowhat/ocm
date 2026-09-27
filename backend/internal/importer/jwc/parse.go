@@ -2,6 +2,7 @@ package jwc
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -38,6 +39,24 @@ const (
 	hRoomCapacity = "教室人数"
 )
 
+// requiredHeaders 是拆分必需的中文表头，缺任一列说明上传的不是教务处课表。
+var requiredHeaders = []string{hCourseSeq, hCourseName, hAdminClasses, hWeekday, hPeriod, hWeeks, hClassroom}
+
+// consumedHeaders 是产出文件会实际消费、但缺失不足以判定“非教务处课表”的列。
+// 缺失时向 Stats.Warnings 注入列级告警（不 fail-fast），避免容量/学分等字段
+// 静默归 0 而操作员在 split 阶段无从感知。
+//
+// 校区/教师职称/人数上限/周学时 四列同样被消费（campus → classrooms，
+// teacher_title/max_students/weekly_hours → offerings），但缺列不在此告警：
+// 源课表本就存在无这些列的正常导出形态（对应导入器均定义为可选列，缺列时
+// 照常留空或记 0），告警纯属噪音。
+var consumedHeaders = []string{
+	hBuilding, hRoomType, hFloor, hRoomCapacity,
+	hTeacherName, hTeacherID,
+	hCollege, hRequirement,
+	hCourseCode, hCredits, hTotalHours, hCategory, hExamType, hGrade,
+}
+
 // jwcRow 是教务处源表一行的强类型视图。数值列保留原始字符串由后续阶段按需解析，
 // 便于在解析失败时定位到具体行。
 type jwcRow struct {
@@ -72,10 +91,25 @@ type jwcRow struct {
 // parseRows 读教务处 xlsx 首 sheet，按中文表头映射为 jwcRow。返回的行保留全部源行
 // （含空行政班行、解析失败的星期行），由后续阶段决定跳过还是报错。仅当表头缺失或
 // 文件无法打开时返回错误。
-func parseRows(data []byte) (rows []jwcRow, err error) {
-	_, recs, err := xlsx.MapRows(data)
+func parseRows(data []byte) (rows []jwcRow, warnings []string, err error) {
+	headers, recs, err := xlsx.MapRows(data)
 	if err != nil {
-		return nil, fmt.Errorf("读取教务处 xlsx 失败：%w", err)
+		return nil, nil, fmt.Errorf("读取教务处 xlsx 失败：%w", err)
+	}
+	var missing []string
+	for _, h := range requiredHeaders {
+		if !xlsx.Has(headers, h) {
+			missing = append(missing, h)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, nil, fmt.Errorf("缺少必需列：%s（请确认上传的是教务处课表）", strings.Join(missing, "、"))
+	}
+	for _, h := range consumedHeaders {
+		if !xlsx.Has(headers, h) {
+			warnings = append(warnings,
+				fmt.Sprintf("缺少列「%s」：相关字段将留空或记为 0，请核对导出模板", h))
+		}
 	}
 	for i, rec := range recs {
 		rows = append(rows, jwcRow{
@@ -104,10 +138,10 @@ func parseRows(data []byte) (rows []jwcRow, err error) {
 			grade:        rec[hGrade],
 			campus:       rec[hCampus],
 			roomCapacity: rec[hRoomCapacity],
-			rowNum:       i + 2, // MapRows 已去掉表头；+1 表头 +1 转 1-based
+			rowNum:       i + 2, // Excel 行号（表头占第 1 行），可在源文件中按数字直接定位
 		})
 	}
-	return rows, nil
+	return rows, warnings, nil
 }
 
 // atoiOr 解析整型，空或非法返回 def。jwc 包不依赖 importer 包，故本地提供。
@@ -134,4 +168,33 @@ func atofOr(s string, def float64) float64 {
 		return def
 	}
 	return n
+}
+
+// atoiStrict 解析整型；空串视为合法缺省 (0, true)，非空但非法返回 (0, false)。
+// 与 atoiOr 的区别：非法值不静默吞掉，由调用方产出告警/行错误。
+func atoiStrict(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, true
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// atofStrict 同 atoiStrict，浮点版。strconv.ParseFloat 会接受 "inf"/"nan"
+// （IEEE 754 特殊值且 err == nil）；这类值会污染数值列并在 Commit 的
+// DECIMAL 写入时炸掉事务，故在此拒绝。与 importer 包同名函数语义一致。
+func atofStrict(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, true
+	}
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+		return 0, false
+	}
+	return n, true
 }

@@ -1149,6 +1149,10 @@
 
 .imports-page__upload-err {
   flex-basis: 100%;
+
+  .cds--inline-notification__subtitle {
+    white-space: pre-line;
+  }
 }
 
 .imports-page__schema {
@@ -1246,8 +1250,17 @@
 }
 
 .imports-page__rows {
-  max-height: 22rem;
-  overflow: auto;
+  // 恒定显示横向滚动条：表格宽度随当前页最宽行变化（每页条数不同、宽度不同），
+  // 若横向滚动条“时有时无”，容器可视高度会跳变，底部被裁切的半行高度随之变化。
+  overflow-x: scroll;
+  overflow-y: auto;
+  // 高度 = 表头(2rem) + 10 个整行(20rem) + 横向滚动条(17px)：可视区域内恰好
+  // 放下整数行，底部不出现被裁切的半行。
+  max-height: calc(2rem * 11 + 17px);
+  // 滚动吸附：拖动容器内滚动条后行对齐到整行位置，顶部不残留被表头遮住
+  // 的半行（配合下方 scroll-padding 预留吸顶表头高度）。
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 2rem;
   margin-block-end: $spacing-05;
   border: 1px solid var(--cds-border-subtle);
 
@@ -1259,6 +1272,13 @@
 
   th,
   td {
+    // 整数行高 + 垂直居中：字体度量会产生非整数行盒（如 28.65625px），在
+    // Windows 125%/150% 显示缩放下逐行取整不一致导致行距忽宽忽窄；显式
+    // 2rem 整数高度使常见缩放档位下行距恒定，vertical-align 使文本居中。
+    height: 2rem;
+    line-height: 1.25rem;
+    vertical-align: middle;
+    scroll-snap-align: start;
     padding: $spacing-02 $spacing-03;
     text-align: left;
     white-space: nowrap;

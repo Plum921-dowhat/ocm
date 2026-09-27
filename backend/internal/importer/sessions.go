@@ -23,6 +23,10 @@ const (
 	ColTeachingClass = "teaching_class"
 	ColSemester      = "semester"
 	ColNote          = "note"
+	// ColSessionSourceRow 是教务处拆分器写入产物 xlsx 的溯源列（源表行号）。
+	// 可选列：手工上传的课表没有它，缺失时 srcRow=0，预览不显示源行列。
+	// 不进 requireColumns，也不参与业务校验——仅用于预览回溯定位。
+	ColSessionSourceRow = "source_row"
 )
 
 // SessionsImporter imports course_sessions from an xlsx file. It resolves
@@ -87,11 +91,14 @@ type sessionInsert struct {
 	courseName        string
 	teachingClassName string
 	semester          string
+	srcRow            int // 教务处源表行号（拆分器产物 source_row 列；手工上传为 0）
 	rowNum            int // 1-based file row, for per-row error reporting
 }
 
 func (s sessionInsert) toPreviewMap() map[string]any {
 	return map[string]any{
+		"rowNum":        s.rowNum,
+		"sourceRow":     s.srcRow,
 		"date":          s.date,
 		"periodStart":   s.periodStart,
 		"periodEnd":     s.periodEnd,
@@ -137,9 +144,11 @@ func parseAndValidate(
 
 	// In-file overlap tracking: classroomID|date -> accepted [start,end] ranges.
 	fileRanges := map[string][][2]int{}
+	srcByRow := map[int]int{}
 	for i, rec := range rows {
-		rowNum := i + 2 // +1 for header, +1 for 1-based
+		rowNum := i + 2 // Excel 行号（+1 表头），与预览「行号」列、错误报告同一坐标系
 		dataRows++
+		srcByRow[rowNum] = atoiOr(rec[ColSessionSourceRow], 0)
 		ins, rowErr := resolveSessionRow(rec, roomByID, offeringByKey, regimes)
 		if rowErr != "" {
 			errs = append(errs, RowError{Row: rowNum, Error: rowErr})
@@ -149,7 +158,12 @@ func parseAndValidate(
 		overlap := false
 		for _, r := range fileRanges[key] {
 			if rangesOverlap(ins.periodStart, ins.periodEnd, r[0], r[1]) {
-				errs = append(errs, RowError{Row: rowNum, Error: "本文件内重复占用该教室+日期+节次"})
+				// 报错带教室/日期/节次定位（与下方 DB 冲突报错同风格）：
+				// 拆分链路下 rowNum 指向重排后的产物 xlsx，操作员无法直接
+				// 回溯，这些字段是把报错映射回源表的关键线索。
+				errs = append(errs, RowError{Row: rowNum, Error: fmt.Sprintf(
+					"本文件内重复占用该教室+日期+节次：%s %s 第%d-%d节",
+					ins.classroomName, ins.date, ins.periodStart, ins.periodEnd)})
 				overlap = true
 				break
 			}
@@ -163,6 +177,7 @@ func parseAndValidate(
 	}
 
 	if len(clean) == 0 {
+		attachSourceRow(errs, srcByRow)
 		return clean, errs, dataRows, nil
 	}
 
@@ -170,6 +185,7 @@ func parseAndValidate(
 	// instead of aborting the transaction.
 	conflict, err := existingConflicts(ctx, db, clean)
 	if err != nil {
+		attachSourceRow(errs, srcByRow)
 		errs = append(errs, RowError{Row: 0, Error: "导入中断：" + err.Error()})
 		return nil, errs, dataRows, fmt.Errorf("query existing sessions: %w", err)
 	}
@@ -184,6 +200,7 @@ func parseAndValidate(
 		}
 		clean = filtered
 	}
+	attachSourceRow(errs, srcByRow)
 	return clean, errs, dataRows, nil
 }
 
@@ -352,6 +369,7 @@ func resolveSessionRow(
 		courseName:        courseName,
 		teachingClassName: teachingClassName,
 		semester:          semester,
+		srcRow:            atoiOr(get(ColSessionSourceRow), 0),
 	}, ""
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"ocm-backend/internal/course"
 	"ocm-backend/internal/user"
+	"ocm-backend/internal/xlsx"
 )
 
 // Column names for the course_offerings import. course / teaching_class /
@@ -97,10 +98,13 @@ type offeringInsert struct {
 	courseName        string
 	teachingClassName string
 	rowNum            int
+	srcRow            int // 拆分器透传的源表行号（手工上传为 0，预览不显示）
 }
 
 func (o offeringInsert) toPreviewMap() map[string]any {
 	return map[string]any{
+		"rowNum":        o.rowNum,
+		"sourceRow":     o.srcRow,
 		"course":        o.courseName,
 		"teachingClass": o.teachingClassName,
 		"semester":      o.semester,
@@ -133,15 +137,45 @@ func parseOfferings(catalog, teaching map[string]int64, payload string) (clean [
 	}
 
 	seen := make(map[string]bool)
+	srcByRow := map[int]int{}
 	for i, rec := range rows {
 		rowNum := i + 2
 		dataRows++
+		srcRow := atoiOr(rec[ColSourceRow], 0)
+		srcByRow[rowNum] = srcRow
 
 		courseName := strings.TrimSpace(rec[ColCourse])
 		teachingClassName := strings.TrimSpace(rec[ColTeachingClass])
 		semester := strings.TrimSpace(rec[ColSemester])
 		if courseName == "" || teachingClassName == "" || semester == "" {
 			errs = append(errs, RowError{Row: rowNum, Error: "course / teaching_class / semester 为空"})
+			continue
+		}
+		// 标识字段（课程序号/教师工号）只允许字母、数字与 . _ -；教师工号可为
+		// 逗号分隔的多值（合班多教师）。违规行报 RowError，dry-run 预览可见、
+		// Commit 跳过（与数值行错误同路径）。
+		identBad := false
+		for _, chk := range []struct {
+			field      string
+			col        string
+			multiValue bool
+		}{
+			{"课程序号", ColCourseSeq, false},
+			{"教师工号", ColTeacherID, true},
+		} {
+			var msg string
+			var ok bool
+			if chk.multiValue {
+				msg, ok = xlsx.CheckIdentifierList(chk.field, rec[chk.col])
+			} else {
+				msg, ok = xlsx.CheckIdentifier(chk.field, rec[chk.col])
+			}
+			if !ok {
+				errs = append(errs, RowError{Row: rowNum, Error: msg})
+				identBad = true
+			}
+		}
+		if identBad {
 			continue
 		}
 		catalogID, ok := catalog[courseName]
@@ -190,6 +224,7 @@ func parseOfferings(catalog, teaching map[string]int64, payload string) (clean [
 			courseName:        courseName,
 			teachingClassName: teachingClassName,
 			rowNum:            rowNum,
+			srcRow:            srcRow,
 		}
 		key := ins.naturalKey()
 		if seen[key] {
@@ -199,6 +234,7 @@ func parseOfferings(catalog, teaching map[string]int64, payload string) (clean [
 		seen[key] = true
 		clean = append(clean, ins)
 	}
+	attachSourceRow(errs, srcByRow)
 	return clean, errs, dataRows, nil
 }
 

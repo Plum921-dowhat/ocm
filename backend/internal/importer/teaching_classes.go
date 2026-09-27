@@ -50,6 +50,7 @@ type teachingGroup struct {
 	note    string
 	members []memberRef // deduped, in first-seen order
 	rowNum  int         // first row of the group, for error reporting
+	srcRow  int         // 拆分器透传的源表行号（取组内首行；手工上传为 0）
 }
 
 type memberRef struct {
@@ -65,11 +66,14 @@ type teachingClassInsert struct {
 	exists    bool  // teaching class already exists (update vs insert)
 	id        int64 // existing id when exists
 	rowNum    int
+	srcRow    int // 拆分器透传的源表数据行序（手工上传为 0，预览不显示）
 	labels    []string
 }
 
 func (g teachingClassInsert) toPreviewMap() map[string]any {
 	return map[string]any{
+		"rowNum":        g.rowNum,
+		"sourceRow":     g.srcRow,
 		"name":          g.name,
 		"note":          g.note,
 		"admin_classes": g.labels,
@@ -81,35 +85,48 @@ func (g teachingClassInsert) toPreviewMap() map[string]any {
 // It performs no writes. A system error (a reference query fails) is returned as
 // err and aborts the parse; unresolvable members or frozen groups are per-group
 // errors that do not block the rest.
-func parseTeachingClasses(ctx context.Context, db *sql.DB, payload string) (clean []teachingClassInsert, errs []RowError, dataRows int, err error) {
+//
+// 计数口径：本表是拍平格式（一个教学班 N 个成员行），故返回两个行数——
+// dataRows 为物理行数，totalUnits 为「导入单元」数（= 教学班组数 + 无法
+// 成组的散行数）。调用方的 Result 统计必须用 totalUnits：SucceededRows 是
+// 组数，用 dataRows 求差会把成功组的额外成员行算成「失败」，出现「失败
+// N 行却无错误」的自相矛盾展示。散行（name/grade 为空）的 badRows 计数
+// 与 errs 报错严格成对出现在同一 continue 路径上。
+func parseTeachingClasses(ctx context.Context, db *sql.DB, payload string) (clean []teachingClassInsert, errs []RowError, dataRows int, totalUnits int, err error) {
 	headers, rows, headerErr := parseWorkbook(payload)
 	if headerErr != nil {
-		return nil, []RowError{{Row: 1, Error: headerErr.Error()}}, 1, headerErr
+		return nil, []RowError{{Row: 1, Error: headerErr.Error()}}, 1, 1, headerErr
 	}
 	if rerr, ok := requireColumns(headers, ColTcName, ColTcAdminGrade, ColTcAdminName); !ok {
-		return nil, []RowError{rerr}, 1, fmt.Errorf("%s", rerr.Error)
+		return nil, []RowError{rerr}, 1, 1, fmt.Errorf("%s", rerr.Error)
 	}
 
 	// Group rows by teaching-class name, preserving first-seen order.
 	groups := map[string]*teachingGroup{}
 	var order []string
+	badRows := 0 // 无法成组的散行数（每个计 1 个失败单元）
+	srcByRow := map[int]int{}
 	for i, rec := range rows {
 		rowNum := i + 2
 		dataRows++
+		srcRow := atoiOr(rec[ColSourceRow], 0)
+		srcByRow[rowNum] = srcRow
 		name := rec[ColTcName]
 		if name == "" {
 			errs = append(errs, RowError{Row: rowNum, Error: "name 为空"})
+			badRows++ // 与上一行报错成对：FailedRows 与 Errors 保持一致
 			continue
 		}
 		grade := rec[ColTcAdminGrade]
 		mname := rec[ColTcAdminName]
 		if grade == "" || mname == "" {
 			errs = append(errs, RowError{Row: rowNum, Error: "admin_grade / admin_name 为空"})
+			badRows++ // 与上一行报错成对：FailedRows 与 Errors 保持一致
 			continue
 		}
 		g, ok := groups[name]
 		if !ok {
-			g = &teachingGroup{name: name, note: rec[ColTcNote], rowNum: rowNum}
+			g = &teachingGroup{name: name, note: rec[ColTcNote], rowNum: rowNum, srcRow: srcRow}
 			groups[name] = g
 			order = append(order, name)
 		} else if g.note == "" {
@@ -118,8 +135,10 @@ func parseTeachingClasses(ctx context.Context, db *sql.DB, payload string) (clea
 		g.members = append(g.members, memberRef{grade: grade, name: mname, rowNum: rowNum})
 	}
 
+	totalUnits = len(order) + badRows
+	attachSourceRow(errs, srcByRow)
 	if len(order) == 0 {
-		return clean, errs, dataRows, nil
+		return clean, errs, dataRows, totalUnits, nil
 	}
 
 	// Load reference data in three queries: admin classes (grade|name -> id),
@@ -128,12 +147,12 @@ func parseTeachingClasses(ctx context.Context, db *sql.DB, payload string) (clea
 	acMap, err := loadAdminClassMap(ctx, db)
 	if err != nil {
 		errs = append(errs, RowError{Row: 0, Error: "导入中断：" + err.Error()})
-		return nil, errs, dataRows, fmt.Errorf("load admin classes: %w", err)
+		return nil, errs, dataRows, totalUnits, fmt.Errorf("load admin classes: %w", err)
 	}
 	tcByName, membersByTC, inUse, err := loadTeachingClassState(ctx, db)
 	if err != nil {
 		errs = append(errs, RowError{Row: 0, Error: "导入中断：" + err.Error()})
-		return nil, errs, dataRows, fmt.Errorf("load teaching class state: %w", err)
+		return nil, errs, dataRows, totalUnits, fmt.Errorf("load teaching class state: %w", err)
 	}
 
 	for _, name := range order {
@@ -167,7 +186,7 @@ func parseTeachingClasses(ctx context.Context, db *sql.DB, payload string) (clea
 		}
 		ins := teachingClassInsert{
 			name: g.name, note: g.note, memberIDs: sortedInt64s(ids),
-			labels: labels, rowNum: g.rowNum,
+			labels: labels, rowNum: g.rowNum, srcRow: g.srcRow,
 		}
 		if tcID, ok := tcByName[g.name]; ok {
 			ins.exists = true
@@ -182,43 +201,44 @@ func parseTeachingClasses(ctx context.Context, db *sql.DB, payload string) (clea
 		}
 		clean = append(clean, ins)
 	}
-	return clean, errs, dataRows, nil
+	attachSourceRow(errs, srcByRow)
+	return clean, errs, dataRows, totalUnits, nil
 }
 
 func analyzeTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Result, error) {
-	clean, errs, dataRows, err := parseTeachingClasses(ctx, db, payload)
+	clean, errs, _, totalUnits, err := parseTeachingClasses(ctx, db, payload)
 	if err != nil {
-		return Result{TotalRows: dataRows, FailedRows: dataRows, Errors: errs}, err
+		return Result{TotalRows: totalUnits, FailedRows: totalUnits, Errors: errs}, err
 	}
 	rows := make([]map[string]any, 0, len(clean))
 	for _, c := range clean {
 		rows = append(rows, c.toPreviewMap())
 	}
 	return Result{
-		TotalRows:     dataRows,
+		TotalRows:     totalUnits, // 组口径：一个教学班 = 一个导入单元
 		SucceededRows: len(clean),
-		FailedRows:    dataRows - len(clean),
+		FailedRows:    totalUnits - len(clean),
 		Errors:        errs,
 		Rows:          rows,
 	}, nil
 }
 
 func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Result, error) {
-	clean, errs, dataRows, err := parseTeachingClasses(ctx, db, payload)
+	clean, errs, _, totalUnits, err := parseTeachingClasses(ctx, db, payload)
 	if err != nil {
-		return Result{TotalRows: dataRows, FailedRows: dataRows, Errors: errs}, err
+		return Result{TotalRows: totalUnits, FailedRows: totalUnits, Errors: errs}, err
 	}
 
-	res := Result{TotalRows: dataRows, Errors: errs}
+	res := Result{TotalRows: totalUnits, Errors: errs}
 	if len(clean) == 0 {
-		res.FailedRows = dataRows
+		res.FailedRows = totalUnits
 		return res, nil
 	}
-	var succeeded int // only counts rows actually written (excludes skip-via-continue)
+	var succeeded int // only counts groups actually written (excludes skip-via-continue)
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		res.FailedRows = dataRows
+		res.FailedRows = totalUnits
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})
 		return res, fmt.Errorf("begin tx: %w", err)
 	}
@@ -250,7 +270,7 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 					res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "教学班已不存在（并发）"})
 					continue
 				}
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("lock teaching class: %w", err)
 			}
@@ -258,14 +278,14 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 			if err := tx.QueryRowContext(ctx,
 				`SELECT COUNT(*) FROM course_offerings WHERE teaching_class_id = ? FOR UPDATE`, c.id,
 			).Scan(&inUseCount); err != nil {
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("recheck teaching class in-use: %w", err)
 			}
 			if inUseCount > 0 {
 				current, err := teachingClassMembersTx(ctx, tx, c.id)
 				if err != nil {
-					res.FailedRows = dataRows
+					res.FailedRows = totalUnits
 					res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 					return res, fmt.Errorf("recheck teaching class members: %w", err)
 				}
@@ -279,18 +299,18 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 			if _, err := tx.ExecContext(ctx,
 				`UPDATE teaching_classes SET name = ?, note = ? WHERE id = ?`,
 				in.Name, in.Note, c.id); err != nil {
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("update teaching class: %w", err)
 			}
 			if _, err := tx.ExecContext(ctx,
 				`DELETE FROM teaching_class_members WHERE teaching_class_id = ?`, c.id); err != nil {
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("clear members: %w", err)
 			}
 			if err := insertMembersTx(ctx, tx, c.id, in.ClassIDs); err != nil {
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("insert members: %w", err)
 			}
@@ -305,18 +325,18 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 					res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "教学班「" + in.Name + "」已存在（并发）"})
 					continue
 				}
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("insert teaching class: %w", err)
 			}
 			id, err := res2.LastInsertId()
 			if err != nil {
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("teaching class last insert id: %w", err)
 			}
 			if err := insertMembersTx(ctx, tx, id, in.ClassIDs); err != nil {
-				res.FailedRows = dataRows
+				res.FailedRows = totalUnits
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("insert members: %w", err)
 			}
@@ -324,12 +344,12 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		res.FailedRows = dataRows
+		res.FailedRows = totalUnits
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})
 		return res, fmt.Errorf("commit: %w", err)
 	}
 	res.SucceededRows = succeeded
-	res.FailedRows = dataRows - res.SucceededRows
+	res.FailedRows = totalUnits - res.SucceededRows
 	return res, nil
 }
 

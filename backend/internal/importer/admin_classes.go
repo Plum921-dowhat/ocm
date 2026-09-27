@@ -36,13 +36,16 @@ func (i *AdminClassesImporter) Commit(ctx context.Context, payload string) (Resu
 type adminClassRow struct {
 	user.AdminClassInput
 	rowNum int
+	srcRow int // 拆分器透传的源表行号（手工上传为 0，预览不显示）
 }
 
 func (r adminClassRow) toPreviewMap() map[string]any {
 	return map[string]any{
-		"grade": r.Grade,
-		"name":  r.Name,
-		"note":  r.Note,
+		"rowNum":    r.rowNum,
+		"sourceRow": r.srcRow,
+		"grade":     r.Grade,
+		"name":      r.Name,
+		"note":      r.Note,
 	}
 }
 
@@ -55,9 +58,12 @@ func parseAdminClasses(payload string) (clean []adminClassRow, errs []RowError, 
 		return nil, []RowError{rerr}, 1, fmt.Errorf("%s", rerr.Error)
 	}
 
+	srcByRow := map[int]int{}
 	for i, rec := range rows {
 		rowNum := i + 2
 		dataRows++
+		srcRow := atoiOr(rec[ColSourceRow], 0)
+		srcByRow[rowNum] = srcRow
 		in := user.AdminClassInput{
 			Grade: rec[ColAdminGrade],
 			Name:  rec[ColAdminName],
@@ -67,8 +73,9 @@ func parseAdminClasses(payload string) (clean []adminClassRow, errs []RowError, 
 			errs = append(errs, RowError{Row: rowNum, Error: msg})
 			continue
 		}
-		clean = append(clean, adminClassRow{AdminClassInput: in, rowNum: rowNum})
+		clean = append(clean, adminClassRow{AdminClassInput: in, rowNum: rowNum, srcRow: srcRow})
 	}
+	attachSourceRow(errs, srcByRow)
 	return clean, errs, dataRows, nil
 }
 

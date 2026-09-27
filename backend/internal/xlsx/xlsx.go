@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -16,7 +17,9 @@ import (
 
 // MapRows reads the first worksheet of an xlsx document, treats the first row
 // as a header, and returns each subsequent row as a map keyed by the lowercased,
-// trimmed header name. Cells arrive as their formatted string value, so numeric
+// trimmed header name. Every cell passes through sanitizeCell (control/zero-
+// width/BOM stripped, NBSP/tab normalized) so invisible characters cannot leak
+// into keys or values. Cells arrive as their formatted string value, so numeric
 // and date cells are already stringified -- matching the importers' string-based
 // validation. Fully blank rows are skipped.
 func MapRows(data []byte) (headers []string, rows []map[string]string, err error) {
@@ -43,7 +46,10 @@ func MapRows(data []byte) (headers []string, rows []map[string]string, err error
 	headerRow := raw[0]
 	idx := make(map[string]int, len(headerRow))
 	for i, h := range headerRow {
-		key := strings.ToLower(strings.TrimSpace(h))
+		// sanitizeCell 先剥 UTF-8 BOM 与控制/零宽字符再 TrimSpace：U+FEFF 不是
+		// Unicode White_Space，若先 TrimSpace，行首 BOM 会挡住后续空白剥离，
+		// 导致「教学楼」匹配失败。
+		key := strings.ToLower(strings.TrimSpace(sanitizeCell(h)))
 		if key == "" {
 			continue
 		}
@@ -63,7 +69,7 @@ func MapRows(data []byte) (headers []string, rows []map[string]string, err error
 		for key, i := range idx {
 			v := ""
 			if i < len(rec) {
-				v = strings.TrimSpace(rec[i])
+				v = strings.TrimSpace(sanitizeCell(rec[i]))
 			}
 			if v != "" {
 				empty = false
@@ -86,6 +92,89 @@ func Has(headers []string, col string) bool {
 		}
 	}
 	return false
+}
+
+// sanitizeCell cleans one cell string read from a workbook:
+//   - keeps \n and \r so multi-line text (备注/描述) survives the read,
+//     normalizes \t to a plain space
+//   - drops the remaining C0/C1 control chars, zero-width/direction marks
+//     (U+200B..U+200F, U+2060), Unicode line separators (U+2028/U+2029) and
+//     the UTF-8 BOM (U+FEFF) — all invisible or line-breaking in Excel but
+//     fatal to exact-match lookups and UNIQUE keys downstream
+//   - normalizes NBSP (U+00A0) to a plain space
+//
+// The caller (MapRows) applies TrimSpace afterwards, so leading/trailing
+// whitespace of any kind ends up stripped.
+func sanitizeCell(s string) string {
+	if s == "" {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\r':
+			b.WriteRune(r)
+		case r == '\t' || r == '\u00A0':
+			b.WriteByte(' ')
+		case r < 0x20 || (r >= 0x7F && r <= 0x9F) ||
+			(r >= 0x200B && r <= 0x200F) || r == 0x2060 ||
+			r == 0x2028 || r == 0x2029 || r == 0xFEFF:
+			// invisible/control: drop
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// reIdentifier limits identifier-like fields (课程代码/课程序号/教师工号) to
+// ASCII letters, digits and . _ -. Real JWC exports use codes like WPUC023 and
+// 2276; anything else (full-width dash －, em dash —, #, /, inner spaces) is
+// garbage that would silently break name/key matching downstream. Empty string
+// is a legal default.
+var reIdentifier = regexp.MustCompile(`^[A-Za-z0-9._-]*$`)
+
+// CheckIdentifier validates an identifier-like field value. When illegal it
+// returns a user-facing message that names each offending character with its
+// code point, so operators can locate and fix them directly in Excel.
+func CheckIdentifier(field, s string) (string, bool) {
+	if reIdentifier.MatchString(s) {
+		return "", true
+	}
+	return fmt.Sprintf("%s %q 含非法字符（%s），仅允许字母、数字及 . _ -", field, s, describeIllegal(s)), false
+}
+
+// describeIllegal lists the illegal characters of s with their Unicode code
+// points, e.g. "—（U+2014）、－（U+FF0D）". Deduplicated in order of appearance.
+func describeIllegal(s string) string {
+	seen := make(map[rune]bool)
+	var parts []string
+	for _, r := range s {
+		if seen[r] || reIdentifier.MatchString(string(r)) {
+			continue
+		}
+		seen[r] = true
+		parts = append(parts, fmt.Sprintf("%c（U+%04X）", r, r))
+	}
+	return strings.Join(parts, "、")
+}
+
+// CheckIdentifierList validates a comma-separated list of identifier-like
+// values (e.g. 教师工号 carrying several teachers joined by ',', as produced by
+// the JWC splitter and already present in existing course_offerings rows).
+// Empty string is legal; every comma-separated segment must satisfy
+// CheckIdentifier (empty segments are reported via their message).
+func CheckIdentifierList(field, s string) (string, bool) {
+	if s == "" {
+		return "", true
+	}
+	for _, part := range strings.Split(s, ",") {
+		if msg, ok := CheckIdentifier(field, part); !ok {
+			return msg, false
+		}
+	}
+	return "", true
 }
 
 // WriteExport writes an xlsx workbook with a single sheet to w. The first row is

@@ -222,6 +222,20 @@ func TestExpandWeeks(t *testing.T) {
 	if _, err := expandWeeks(""); err == nil {
 		t.Error("expandWeeks(\"\") 期望错误")
 	}
+	// 硬上界 30：1-30 合法（边界值），1-31 报错。
+	weeks30 := make([]int, 0, 30)
+	for i := 1; i <= 30; i++ {
+		weeks30 = append(weeks30, i)
+	}
+	if got, err := expandWeeks("1-30"); err != nil || !equal(got, weeks30) {
+		t.Errorf("expandWeeks(\"1-30\") err=%v got=%v, want 1..30", err, got)
+	}
+	if _, err := expandWeeks("1-31"); err == nil {
+		t.Error("expandWeeks(\"1-31\") 期望超出硬上界错误")
+	}
+	if _, err := expandWeeks("1-99999"); err == nil {
+		t.Error("expandWeeks(\"1-99999\") 期望超出周次上限错误")
+	}
 }
 
 // TestTeachingClassName 单测教学班命名（区间压缩 + 回退）。
@@ -280,6 +294,67 @@ func TestGradeFor(t *testing.T) {
 	}
 }
 
+var (
+	splitWeek1  = time.Date(2024, 9, 2, 0, 0, 0, 0, time.UTC)
+	splitRegime = []schedule.Regime{{Name: "测试作息", EffectiveMonth: 1, EffectiveDay: 1, Periods: allPeriods()}}
+)
+
+// splitHeaders 是教务处课表拆分所需的必需列。
+var splitHeaders = []string{"课程序号", "课程名称", "行政班", "星期", "节次", "起止周", "上课教室"}
+
+func buildTable(t *testing.T, headers []string, rows [][]any) []byte {
+	t.Helper()
+	b, err := xlsx.BuildBytes("jwc", headers, rows)
+	if err != nil {
+		t.Fatalf("构造 xlsx 失败：%v", err)
+	}
+	return b
+}
+
+// TestSplitEmptyTable 纯空表（有表头无数据行）报「无数据行」。
+func TestSplitEmptyTable(t *testing.T) {
+	_, err := Split(buildTable(t, splitHeaders, nil), "2024-2025-1", splitWeek1, splitRegime)
+	if err == nil || !strings.Contains(err.Error(), "无数据行") {
+		t.Fatalf("期望「无数据行」错误，got %v", err)
+	}
+}
+
+// TestSplitWrongHeaders 表头不匹配时 fail-fast 并列出缺失列。
+func TestSplitWrongHeaders(t *testing.T) {
+	data := buildTable(t, []string{"姓名", "学号"}, [][]any{{"张三", "2024001"}})
+	_, err := Split(data, "2024-2025-1", splitWeek1, splitRegime)
+	if err == nil || !strings.Contains(err.Error(), "缺少必需列") {
+		t.Fatalf("期望「缺少必需列」错误，got %v", err)
+	}
+}
+
+// TestSplitNoOfferings 全无效行（空序号 + 无行政班的解析失败行）报 0 产出并附告警。
+func TestSplitNoOfferings(t *testing.T) {
+	rows := [][]any{
+		{"", "高数", "机电241", "1", "3-4", "1-8", "A101"},
+		{"S1", "英语", "", "1", "abc", "1-8", "A101"},
+	}
+	_, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err == nil || !strings.Contains(err.Error(), "未解析出任何有效开课") {
+		t.Fatalf("期望「未解析出任何有效开课」错误，got %v", err)
+	}
+	if !strings.Contains(err.Error(), "近期告警") {
+		t.Errorf("错误应附告警定位，got %v", err)
+	}
+	if !strings.Contains(err.Error(), "\n") {
+		t.Errorf("错误告警应以换行分隔，got %v", err)
+	}
+}
+
+// TestSplitOfferingsNoSessions 有开课但槽位全为停课占位时报「均未生成课次」。
+func TestSplitOfferingsNoSessions(t *testing.T) {
+	rows := [][]any{{"S1", "英语", "机电241", "1", "1-2", "1-8", "停课"}}
+	_, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err == nil || !strings.Contains(err.Error(), "均未生成课次") {
+		t.Fatalf("期望「均未生成课次」错误，got %v", err)
+	}
+}
+
 func equal(a, b []int) bool {
 	if len(a) != len(b) {
 		return false
@@ -290,4 +365,206 @@ func equal(a, b []int) bool {
 		}
 	}
 	return true
+}
+
+// TestSplitMissingConsumedColumn 缺少业务消费列（如「教室人数」）时不 fail-fast，
+// 而是注入列级告警，让操作员在 split 阶段感知字段缺失。
+func TestSplitMissingConsumedColumn(t *testing.T) {
+	rows := [][]any{{"S1", "英语", "机电241", "1", "1-2", "1-8", "A101"}}
+	res, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err != nil {
+		t.Fatalf("Split 失败：%v", err)
+	}
+	found := false
+	for _, w := range res.Stats.Warnings {
+		if strings.Contains(w, "缺少列") && strings.Contains(w, "教室人数") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("期望出现「教室人数」缺列告警，got %v", res.Stats.Warnings)
+	}
+}
+
+// TestSplitNumericGarbageWarning 非空非法数值（人数上限/学分）产生行级告警，
+// 且不阻断拆分（槽位仍产出课次）。
+func TestSplitNumericGarbageWarning(t *testing.T) {
+	headers := append(append([]string{}, splitHeaders...), "人数上限", "学分")
+	rows := [][]any{{"S1", "英语", "机电241", "1", "1-2", "1-8", "A101", "三十", "3.0x"}}
+	res, err := Split(buildTable(t, headers, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err != nil {
+		t.Fatalf("Split 失败：%v", err)
+	}
+	gotMax, gotCredits := false, false
+	for _, w := range res.Stats.Warnings {
+		if strings.Contains(w, "人数上限") && strings.Contains(w, "不是合法数字") {
+			gotMax = true
+		}
+		if strings.Contains(w, "学分") && strings.Contains(w, "不是合法数字") {
+			gotCredits = true
+		}
+	}
+	if !gotMax || !gotCredits {
+		t.Errorf("期望人数上限/学分脏数据告警，got %v", res.Stats.Warnings)
+	}
+	if res.Stats.Offerings != 1 || res.Stats.Sessions != 8 {
+		t.Errorf("告警不应阻断拆分：Offerings=%d Sessions=%d，期望 1/8", res.Stats.Offerings, res.Stats.Sessions)
+	}
+}
+
+// TestSplitWeekOverMax 起止周超硬上界（1-52 > maxWeek=30）：解析报错、该槽位
+// 跳过（0 课次），但不阻断其他行——同文件的有效行仍正常产出。
+func TestSplitWeekOverMax(t *testing.T) {
+	rows := [][]any{
+		{"S1", "英语", "机电241", "1", "1-2", "1-8", "A101"},
+		{"S2", "高数", "机电242", "2", "3-4", "1-52", "B202"},
+	}
+	res, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err != nil {
+		t.Fatalf("Split 失败：%v", err)
+	}
+	found := false
+	for _, w := range res.Stats.Warnings {
+		if strings.Contains(w, "起止周非法（周次须在 1-30 内）") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("期望出现周次超界告警，got %v", res.Stats.Warnings)
+	}
+	if res.Stats.Offerings != 2 {
+		t.Errorf("Offerings = %d，期望 2（行级解析错误不阻断开课）", res.Stats.Offerings)
+	}
+	if res.Stats.Sessions != 8 {
+		t.Errorf("Sessions = %d，期望 8（1-52 槽位跳过，1-8 正常产出）", res.Stats.Sessions)
+	}
+}
+
+// TestSplitWeekSpanBusinessWarning 跨度 27~30 周（> maxBusinessWeekSpan=26 但
+// ≤ maxWeek=30）触发「超出正常学期长度」业务告警但不阻断；1-30 为硬上界边界值，
+// 正常解析出全部课次。
+func TestSplitWeekSpanBusinessWarning(t *testing.T) {
+	for _, weekStr := range []string{"1-28", "1-30"} {
+		rows := [][]any{{"S1", "英语", "机电241", "1", "1-2", weekStr, "A101"}}
+		res, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, splitRegime)
+		if err != nil {
+			t.Fatalf("Split(%s) 失败：%v", weekStr, err)
+		}
+		found := false
+		for _, w := range res.Stats.Warnings {
+			if strings.Contains(w, "超出正常学期长度") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("起止周 %s：期望出现周跨度业务告警，got %v", weekStr, res.Stats.Warnings)
+		}
+	}
+	// 1-28 -> 28 课次（业务告警不阻断）。
+	rows := [][]any{{"S1", "英语", "机电241", "1", "1-2", "1-28", "A101"}}
+	res, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err != nil {
+		t.Fatalf("Split 失败：%v", err)
+	}
+	if res.Stats.Sessions != 28 {
+		t.Errorf("Sessions = %d，期望 28（业务告警不阻断）", res.Stats.Sessions)
+	}
+}
+
+// TestSplitZeroSessionOfferingWarning 全部槽位为「停课」占位的开课仍产出，
+// 但触发 0 课次（orphan offering）告警；其他开课不受影响。
+func TestSplitZeroSessionOfferingWarning(t *testing.T) {
+	rows := [][]any{
+		{"S1", "英语", "机电241", "1", "1-2", "1-8", "A101"},
+		{"S2", "体育", "机电242", "2", "3-4", "1-8", "停课"},
+	}
+	res, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err != nil {
+		t.Fatalf("Split 失败：%v", err)
+	}
+	found := false
+	for _, w := range res.Stats.Warnings {
+		if strings.Contains(w, "未生成任何课次") && strings.Contains(w, "体育") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("期望出现 0 课次开课告警，got %v", res.Stats.Warnings)
+	}
+	if res.Stats.Offerings != 2 || res.Stats.Sessions != 8 {
+		t.Errorf("Offerings/Sessions = %d/%d，期望 2/8（orphan 开课仍产出，不阻断）",
+			res.Stats.Offerings, res.Stats.Sessions)
+	}
+}
+
+// TestSplitIdentifierWarning 课程代码/教师工号含特殊字符（破折号/斜杠）产生
+// 行级告警但不阻断拆分。
+func TestSplitIdentifierWarning(t *testing.T) {
+	headers := append(append([]string{}, splitHeaders...), "课程代码", "教师工号")
+	rows := [][]any{{"S1", "英语", "机电241", "1", "1-2", "1-8", "A101", "MATH—101", "T1/2"}}
+	res, err := Split(buildTable(t, headers, rows), "2024-2025-1", splitWeek1, splitRegime)
+	if err != nil {
+		t.Fatalf("Split 失败：%v", err)
+	}
+	gotCode, gotID := false, false
+	for _, w := range res.Stats.Warnings {
+		if strings.Contains(w, "课程代码") && strings.Contains(w, "—（U+2014）") {
+			gotCode = true
+		}
+		if strings.Contains(w, "教师工号") && strings.Contains(w, "/（U+002F）") {
+			gotID = true
+		}
+	}
+	if !gotCode || !gotID {
+		t.Errorf("期望课程代码/教师工号特殊字符告警，got %v", res.Stats.Warnings)
+	}
+	if res.Stats.Offerings != 1 || res.Stats.Sessions != 8 {
+		t.Errorf("告警不应阻断拆分：Offerings=%d Sessions=%d，期望 1/8",
+			res.Stats.Offerings, res.Stats.Sessions)
+	}
+}
+
+// TestSplitRegimeDriftWarning 学期内作息制度切换（如冬夏令时）或跨学期数据
+// 导致首周与末周落入不同作息制度时，产生中性文案告警且不阻断。
+func TestSplitRegimeDriftWarning(t *testing.T) {
+	regimes := []schedule.Regime{
+		{Name: "秋季作息", EffectiveMonth: 9, EffectiveDay: 1, Periods: allPeriods()},
+		{Name: "春季作息", EffectiveMonth: 2, EffectiveDay: 1, Periods: allPeriods()},
+	}
+	rows := [][]any{{"S1", "英语", "机电241", "1", "1-2", "1-30", "A101"}}
+	res, err := Split(buildTable(t, splitHeaders, rows), "2024-2025-1", splitWeek1, regimes)
+	if err != nil {
+		t.Fatalf("Split 失败：%v", err)
+	}
+	found := false
+	for _, w := range res.Stats.Warnings {
+		if strings.Contains(w, "作息切换或跨学期数据") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("期望出现作息漂移告警，got %v", res.Stats.Warnings)
+	}
+}
+
+// TestStrictNumericParse strict 变体：空串合法缺省，非空非法返回 false。
+func TestStrictNumericParse(t *testing.T) {
+	if v, ok := atoiStrict(""); !ok || v != 0 {
+		t.Errorf("atoiStrict(\"\") = (%d,%v), want (0,true)", v, ok)
+	}
+	if v, ok := atoiStrict(" 45 "); !ok || v != 45 {
+		t.Errorf("atoiStrict(\" 45 \") = (%d,%v), want (45,true)", v, ok)
+	}
+	if _, ok := atoiStrict("三十"); ok {
+		t.Errorf("atoiStrict(\"三十\") 期望非法")
+	}
+	if _, ok := atoiStrict("10.0"); ok {
+		t.Errorf("atoiStrict(\"10.0\") 期望非法（整数列不接受小数）")
+	}
+	if v, ok := atofStrict("3.5"); !ok || v != 3.5 {
+		t.Errorf("atofStrict(\"3.5\") = (%v,%v), want (3.5,true)", v, ok)
+	}
+	if _, ok := atofStrict("3.0学分"); ok {
+		t.Errorf("atofStrict(\"3.0学分\") 期望非法")
+	}
 }
