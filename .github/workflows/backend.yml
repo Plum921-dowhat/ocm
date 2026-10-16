@@ -88,9 +88,13 @@ jobs:
       # Contract drift gate: regenerate the OpenAPI docs and fail if they
       # differ from the committed version (someone changed handlers/models
       # without running swag init).
+      # Do NOT add --parseDependency: it walks the go-list dependency tree,
+      # which drags in stdlib os/user — a second package named "user" whose
+      # User type collides with internal/user.User, making swag rename our
+      # schema to ocm-backend_internal_user.User (see agents/lessons.md).
       - name: Swagger docs drift
         run: |
-          go tool swag init -o docs --parseDependency --parseInternal --requiredByDefault
+          go tool swag init -o docs --requiredByDefault
           git diff --exit-code -- docs/
 
       - name: Test

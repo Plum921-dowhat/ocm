@@ -71,6 +71,14 @@
   `deploy/mosquitto/README.md`。
 - **promtail 已 EOL（2026-03）**：日志采集用 Grafana Alloy，别再引入
   promtail 配置。
+- **swag 定义名会随依赖图漂移（pgx → stdlib `os/user` 撞名）**：`--parseDependency`
+  解析整个 go-list 依赖树，其中包括 stdlib `os/user`——它的包名就是 `user` 且含
+  `User` 类型，与 `internal/user.User` 在 swag 全局同名去重表相撞，双方被改名，我们的
+  定义变成 `ocm-backend_internal_user.User`（swagger 漂移门禁红，2026-10 迁移 pgx 后
+  首次暴露）。本项目注解只引用内部包类型，生成命令**一律不带 `--parseDependency`**
+  （`--parseInternal` 一并去掉：两者只作用于依赖树 walk，去掉后产物逐字节一致）。别用
+  `--useStructName`（全局去包名前缀，契约大改）或 `// @name` 注释（对非分组 type 声明
+  不生效）绕。
 
 ## 环境（国内开发机）
 
