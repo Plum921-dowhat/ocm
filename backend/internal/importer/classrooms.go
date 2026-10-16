@@ -141,8 +141,8 @@ func commitClassrooms(ctx context.Context, db *sql.DB, payload string) (Result, 
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO classrooms (name, building, capacity, type, floor, campus, status, description)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-ON DUPLICATE KEY UPDATE building=VALUES(building), capacity=VALUES(capacity), type=VALUES(type), floor=VALUES(floor), campus=VALUES(campus), status=VALUES(status), description=VALUES(description)`)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (name) DO UPDATE SET building=EXCLUDED.building, capacity=EXCLUDED.capacity, type=EXCLUDED.type, floor=EXCLUDED.floor, campus=EXCLUDED.campus, status=EXCLUDED.status, description=EXCLUDED.description`)
 	if err != nil {
 		res.FailedRows = dataRows
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})

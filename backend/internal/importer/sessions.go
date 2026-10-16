@@ -258,7 +258,7 @@ func commitSessions(
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO course_sessions (offering_id, classroom_id, date, period_start, period_end, note) VALUES (?, ?, ?, ?, ?, ?)`)
+		`INSERT INTO course_sessions (offering_id, classroom_id, date, period_start, period_end, note) VALUES ($1, $2, $3, $4, $5, $6)`)
 	if err != nil {
 		res.SucceededRows = 0
 		res.FailedRows = dataRows
@@ -368,7 +368,7 @@ func resolveSessionRow(
 	}
 	// note has no domain normalizer (sessions take no CRUD input struct), so the
 	// VARCHAR(255) cap is checked here; an overlong cell would otherwise abort
-	// the whole commit transaction with MySQL Error 1406.
+	// the whole commit transaction with PostgreSQL 22001 (value too long).
 	note := get(ColNote)
 	if msg, ok := dbutil.MaxRunes("note", note, 255); !ok {
 		return sessionInsert{}, msg
@@ -424,13 +424,13 @@ func existingConflicts(ctx context.Context, db *sql.DB, clean []sessionInsert) (
 			end = len(pairs)
 		}
 		batch := pairs[start:end]
-		placeholders := make([]string, len(batch))
+		ph := make([]string, len(batch))
 		args := make([]any, 0, len(batch)*2)
 		for i, p := range batch {
-			placeholders[i] = "(?, ?)"
+			ph[i] = "(" + dbutil.Placeholders(i*2+1, 2) + ")"
 			args = append(args, p[0], p[1])
 		}
-		inList := strings.Join(placeholders, ",")
+		inList := strings.Join(ph, ",")
 
 		sessQ := fmt.Sprintf(
 			`SELECT classroom_id, date, period_start, period_end FROM course_sessions WHERE (classroom_id, date) IN (%s)`,

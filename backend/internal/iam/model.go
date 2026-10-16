@@ -1,6 +1,6 @@
 // Package iam implements the identity-and-access management layer: roles,
 // role permissions, user/group role grants and direct permission grants,
-// stored in MySQL. Effective permissions (direct role grants ∪ group role
+// stored in PostgreSQL. Effective permissions (direct role grants ∪ group role
 // grants ∪ direct permission grants, minus expired rows) are computed per
 // request by user.LoadSubject so grant changes take effect immediately.
 package iam

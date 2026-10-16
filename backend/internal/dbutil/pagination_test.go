@@ -15,7 +15,9 @@ func TestAppendLimit(t *testing.T) {
 
 	p := Pagination{Limit: 100, Offset: 200}
 	q, args = p.AppendLimit(`SELECT 1 ORDER BY id`, []any{"x"})
-	if q != `SELECT 1 ORDER BY id LIMIT ? OFFSET ?` {
+	// Numbering continues the caller's arguments: one arg is already bound, so
+	// the LIMIT takes $2 and the OFFSET $3.
+	if q != `SELECT 1 ORDER BY id LIMIT $2 OFFSET $3` {
 		t.Errorf("paged query = %q", q)
 	}
 	if !reflect.DeepEqual(args, []any{"x", 100, 200}) {

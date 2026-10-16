@@ -20,7 +20,7 @@ import (
 // handleMessage.
 const subscribeFilter = TopicRoot + "/#"
 
-// perMessageTimeout bounds each registry write so a slow MySQL can never stall
+// perMessageTimeout bounds each registry write so a slow PostgreSQL can never stall
 // the paho message pipeline (its callbacks run in order on one goroutine).
 const perMessageTimeout = 5 * time.Second
 

@@ -120,8 +120,8 @@ func commitAdminClasses(ctx context.Context, db *sql.DB, payload string) (Result
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO admin_classes (grade, name, note)
-VALUES (?, ?, ?)
-ON DUPLICATE KEY UPDATE note=VALUES(note)`)
+VALUES ($1, $2, $3)
+ON CONFLICT (grade, name) DO UPDATE SET note=EXCLUDED.note`)
 	if err != nil {
 		res.FailedRows = dataRows
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})

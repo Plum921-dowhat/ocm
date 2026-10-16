@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"ocm-backend/internal/booking"
@@ -54,25 +53,20 @@ func buildSessionWhere(f SessionFilter) (string, []any) {
 	where := ` WHERE 1=1`
 	var args []any
 	if f.OfferingID > 0 {
-		where += ` AND s.offering_id = ?`
-		args = append(args, f.OfferingID)
+		where += ` AND s.offering_id = ` + dbutil.Bind(&args, f.OfferingID)
 	}
 	if f.ClassroomID > 0 {
-		where += ` AND s.classroom_id = ?`
-		args = append(args, f.ClassroomID)
+		where += ` AND s.classroom_id = ` + dbutil.Bind(&args, f.ClassroomID)
 	}
 	if f.From != "" {
-		where += ` AND s.date >= ?`
-		args = append(args, f.From)
+		where += ` AND s.date >= ` + dbutil.Bind(&args, f.From)
 	}
 	if f.To != "" {
-		where += ` AND s.date <= ?`
-		args = append(args, f.To)
+		where += ` AND s.date <= ` + dbutil.Bind(&args, f.To)
 	}
 	if f.Q != "" {
-		where += ` AND (c.name LIKE ? OR c.code LIKE ? OR tc.name LIKE ? OR cr.name LIKE ? OR o.teacher LIKE ? OR o.semester LIKE ?)`
 		pat := dbutil.LikePattern(dbutil.EscapeLike(f.Q))
-		args = append(args, pat, pat, pat, pat, pat, pat)
+		where += ` AND (c.name ILIKE ` + dbutil.Bind(&args, pat) + ` OR c.code ILIKE ` + dbutil.Bind(&args, pat) + ` OR tc.name ILIKE ` + dbutil.Bind(&args, pat) + ` OR cr.name ILIKE ` + dbutil.Bind(&args, pat) + ` OR o.teacher ILIKE ` + dbutil.Bind(&args, pat) + ` OR o.semester ILIKE ` + dbutil.Bind(&args, pat) + `)`
 	}
 	return where, args
 }
@@ -159,7 +153,7 @@ func (s *Store) PageSessions(ctx context.Context, f SessionFilter, p dbutil.Pagi
 
 func (s *Store) GetSession(ctx context.Context, id int64) (SessionView, error) {
 	q := `SELECT s.id, s.offering_id, s.classroom_id, s.date, s.period_start, s.period_end, s.note, s.created_at,
-       c.name, c.code, tc.name, o.teacher, o.semester, cr.name ` + sessionJoin + ` WHERE s.id = ?`
+       c.name, c.code, tc.name, o.teacher, o.semester, cr.name ` + sessionJoin + ` WHERE s.id = $1`
 	var v SessionView
 	var date time.Time
 	err := s.db.QueryRowContext(ctx, q, id).Scan(
@@ -192,10 +186,8 @@ func (s *Store) classNamesBySession(ctx context.Context, ids []int64) (map[int64
 	if len(ids) == 0 {
 		return out, nil
 	}
-	placeholders := make([]string, len(ids))
 	args := make([]any, 0, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
+	for _, id := range ids {
 		args = append(args, id)
 	}
 	q := fmt.Sprintf(
@@ -206,7 +198,7 @@ func (s *Store) classNamesBySession(ctx context.Context, ids []int64) (map[int64
 		 JOIN admin_classes ac ON ac.id = m.admin_class_id
 		 WHERE s.id IN (%s)
 		 ORDER BY s.id, ac.grade, ac.name`,
-		strings.Join(placeholders, ","),
+		dbutil.Placeholders(1, len(ids)),
 	)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -245,7 +237,7 @@ func (s *Store) CreateSession(ctx context.Context, in SessionInput) (SessionView
 	defer func() { _ = tx.Rollback() }()
 
 	var lockID int64
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM classrooms WHERE id = ? FOR UPDATE`, in.ClassroomID).Scan(&lockID); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM classrooms WHERE id = $1 FOR UPDATE`, in.ClassroomID).Scan(&lockID); err != nil {
 		return SessionView{}, fmt.Errorf("lock classroom: %w", err)
 	}
 
@@ -255,16 +247,14 @@ func (s *Store) CreateSession(ctx context.Context, in SessionInput) (SessionView
 		return SessionView{}, ErrClassroomConflict
 	}
 
-	res, err := tx.ExecContext(ctx,
-		`INSERT INTO course_sessions (offering_id, classroom_id, date, period_start, period_end, note) VALUES (?, ?, ?, ?, ?, ?)`,
+	var id int64
+	err = tx.QueryRowContext(ctx,
+		`INSERT INTO course_sessions (offering_id, classroom_id, date, period_start, period_end, note) VALUES ($1, $2, $3, $4, $5, $6)
+		 RETURNING id`,
 		in.OfferingID, in.ClassroomID, in.Date, in.PeriodStart, in.PeriodEnd, in.Note,
-	)
+	).Scan(&id)
 	if err != nil {
 		return SessionView{}, fmt.Errorf("create session: %w", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return SessionView{}, fmt.Errorf("create session last insert id: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return SessionView{}, fmt.Errorf("commit: %w", err)
@@ -283,7 +273,7 @@ func (s *Store) UpdateSession(ctx context.Context, id int64, in SessionInput) (S
 	defer func() { _ = tx.Rollback() }()
 
 	var lockID int64
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM classrooms WHERE id = ? FOR UPDATE`, in.ClassroomID).Scan(&lockID); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM classrooms WHERE id = $1 FOR UPDATE`, in.ClassroomID).Scan(&lockID); err != nil {
 		return SessionView{}, fmt.Errorf("lock classroom: %w", err)
 	}
 
@@ -294,7 +284,7 @@ func (s *Store) UpdateSession(ctx context.Context, id int64, in SessionInput) (S
 	}
 
 	res, err := tx.ExecContext(ctx,
-		`UPDATE course_sessions SET offering_id = ?, classroom_id = ?, date = ?, period_start = ?, period_end = ?, note = ? WHERE id = ?`,
+		`UPDATE course_sessions SET offering_id = $1, classroom_id = $2, date = $3, period_start = $4, period_end = $5, note = $6 WHERE id = $7`,
 		in.OfferingID, in.ClassroomID, in.Date, in.PeriodStart, in.PeriodEnd, in.Note, id,
 	)
 	if err != nil {
@@ -323,11 +313,10 @@ func sessionConflict(ctx context.Context, q interface {
 }, classroomID int64, date string, ps, pe int, excludeID int64) (bool, error) {
 	var one int
 
-	sessQuery := `SELECT 1 FROM course_sessions WHERE classroom_id = ? AND date = ? AND period_start <= ? AND period_end >= ?`
+	sessQuery := `SELECT 1 FROM course_sessions WHERE classroom_id = $1 AND date = $2 AND period_start <= $3 AND period_end >= $4`
 	args := []any{classroomID, date, pe, ps}
 	if excludeID > 0 {
-		sessQuery += ` AND id <> ?`
-		args = append(args, excludeID)
+		sessQuery += ` AND id <> ` + dbutil.Bind(&args, excludeID)
 	}
 	sessQuery += ` LIMIT 1`
 
@@ -340,7 +329,7 @@ func sessionConflict(ctx context.Context, q interface {
 	}
 
 	err = q.QueryRowContext(ctx,
-		`SELECT 1 FROM classroom_bookings WHERE classroom_id = ? AND date = ? AND status IN ('pending','approved') AND period_start <= ? AND period_end >= ? LIMIT 1`,
+		`SELECT 1 FROM classroom_bookings WHERE classroom_id = $1 AND date = $2 AND status IN ('pending','approved') AND period_start <= $3 AND period_end >= $4 LIMIT 1`,
 		classroomID, date, pe, ps,
 	).Scan(&one)
 	if err == nil {
@@ -353,7 +342,7 @@ func sessionConflict(ctx context.Context, q interface {
 }
 
 func (s *Store) DeleteSession(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM course_sessions WHERE id = ?`, id)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM course_sessions WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
@@ -399,7 +388,7 @@ func (s *Store) listActiveBookings(ctx context.Context, classroomID int64, from,
 		FROM classroom_bookings b
 		JOIN classrooms cr ON cr.id = b.classroom_id
 		JOIN users u ON u.id = b.user_id
-		WHERE b.classroom_id = ? AND b.date >= ? AND b.date <= ? AND b.status IN ('pending','approved')
+		WHERE b.classroom_id = $1 AND b.date >= $2 AND b.date <= $3 AND b.status IN ('pending','approved')
 		ORDER BY b.date, b.period_start, b.id`, classroomID, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("list bookings for timetable: %w", err)

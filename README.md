@@ -14,8 +14,8 @@ program, plus a device-side IoT SDK and an optional monitoring stack.
 
 ```bash
 git clone <repo> ocm && cd ocm
-# dev stack: mysql + backend (air hot-reload) + web (vite)
-# 开发全栈: mysql + backend(air 热更) + web(vite)
+# dev stack: postgres + backend (air hot-reload) + web (vite)
+# 开发全栈: postgres + backend(air 热更) + web(vite)
 docker compose up -d
 ```
 
@@ -29,7 +29,7 @@ Web 控制台 http://localhost:5173 ,默认账号 `admin` / `admin123`(开发默
 
 | Directory | Contents |
 |---|---|
-| `backend/` | Go backend (`net/http` ServeMux + MySQL 8, idempotent migrations) |
+| `backend/` | Go backend (`net/http` ServeMux + PostgreSQL 17, idempotent migrations) |
 | `web/` | Web console (React 19 + Vite + Carbon, TypeScript strict) |
 | `miniapp/` | WeChat mini-program (glass-easel + TDesign, WebView by default) |
 | `iot/` | Device-side SDK & simulator (second Go module; MQTT contract in `iot/spec/spec.md`) |
@@ -39,7 +39,7 @@ Web 控制台 http://localhost:5173 ,默认账号 `admin` / `admin123`(开发默
 
 | 目录 | 内容 |
 |---|---|
-| `backend/` | Go 后端(`net/http` ServeMux + MySQL 8,幂等迁移) |
+| `backend/` | Go 后端(`net/http` ServeMux + PostgreSQL 17,幂等迁移) |
 | `web/` | Web 控制台(React 19 + Vite + Carbon,TypeScript strict) |
 | `miniapp/` | 微信小程序(glass-easel + TDesign,默认 WebView) |
 | `iot/` | 设备侧 SDK 与模拟器(第二个 Go module,MQTT 契约见 `iot/spec/spec.md`) |

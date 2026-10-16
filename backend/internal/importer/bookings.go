@@ -258,7 +258,8 @@ func resolveBookingRow(
 		return bookingInsert{}, "purpose 为空"
 	}
 	// VARCHAR(255) cap (booking/store.go): reject per row instead of letting a
-	// long cell abort the whole commit transaction with MySQL Error 1406.
+	// long cell abort the whole commit transaction with PostgreSQL 22001 (value
+	// too long for type character varying).
 	if msg, ok := dbutil.MaxRunes("purpose", purpose, 255); !ok {
 		return bookingInsert{}, msg
 	}
@@ -357,7 +358,7 @@ func commitBookings(
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO classroom_bookings (classroom_id, user_id, date, period_start, period_end, status, purpose) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+		`INSERT INTO classroom_bookings (classroom_id, user_id, date, period_start, period_end, status, purpose) VALUES ($1, $2, $3, $4, $5, $6, $7)`)
 	if err != nil {
 		res.FailedRows = dataRows
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})
@@ -436,13 +437,13 @@ func existingBookingConflicts(ctx context.Context, db *sql.DB, clean []bookingIn
 			end = len(pairs)
 		}
 		batch := pairs[start:end]
-		placeholders := make([]string, len(batch))
+		ph := make([]string, len(batch))
 		args := make([]any, 0, len(batch)*2)
 		for i, p := range batch {
-			placeholders[i] = "(?, ?)"
+			ph[i] = "(" + dbutil.Placeholders(i*2+1, 2) + ")"
 			args = append(args, p[0], p[1])
 		}
-		inList := strings.Join(placeholders, ",")
+		inList := strings.Join(ph, ",")
 
 		// Sessions: range occupancy (period_start..period_end).
 		sessQ := fmt.Sprintf(

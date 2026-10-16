@@ -2,24 +2,38 @@
 title: 后端
 ---
 
-Go 后端(`module ocm-backend`,Go 1.26)。`net/http` ServeMux(Go 1.22+ 方法路由)+ MySQL 8。本页只写**行为承诺与横切约定**——实现细节看代码注释,路由与参数起测试服务器看(开发环境挂 `/swagger/`,契约生成物在 `backend/docs/`)。
+Go 后端(`module ocm-backend`,Go 1.26)。`net/http` ServeMux(Go 1.22+ 方法路由)+ **PostgreSQL 17**。本页只写**行为承诺与横切约定**——实现细节看代码注释,路由与参数起测试服务器看(开发环境挂 `/swagger/`,契约生成物在 `backend/docs/`)。
 
-## 横切约定(所有端点)
+## 数据库要求
 
-- **鉴权**:`Authorization: Bearer <JWT>`(HS256、24h,无 refresh token)。公开端点仅 `login`/`wx-bind`/`wx-login`;小程序身份经后端 `code2Session` 解析 openid,`X-WX-OPENID` 头可伪造、永不信任。
-- **权限**:RBAC,handler 校验 permission 字符串(如 `course:manage`)而非角色名;有效权限 = 直接角色授权 ∪ 组角色授权 ∪ 直接授权(可带 `expires_at`,过期即失效);通配 `*` 仅系统 admin 角色持有,不在权限目录、API 无法授予。授权/撤销/过期**即时生效**(权限每请求实时计算)。权限目录在代码(`authz.Catalog`),`GET /api/permissions` 可查。
-- **分页/搜索**:列表接口统一信封 `{items, total, page, pageSize}`,参数 `page`/`page_size`(默认 100、上限 500)/`q`(LIKE contains,已转义);导出与单条 GET 不分页。
-- **错误形状**:统一 `{"error": "<message>"}`;每个响应带 `X-Request-ID` 头,与日志行 `request_id` 同源——反馈问题时引用它可精确定位那一次请求(见[可观测性](/guide/observability))。
+后端**只支持 PostgreSQL**(自 2026-10 的迁移起,不再支持 MySQL)。连接层用 `pgx/v5` 的 `database/sql` 驱动,SQL 是裸 `$1..$n` 占位符,无 ORM。
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `DB_HOST` / `DB_PORT` | `localhost` / `5432` | 生产模式缺 `DB_HOST` 拒绝启动(不静默回落 localhost);`APP_ENV=development` 才允许回落 |
+| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `ocm` / `ocm` / `ocm` | |
+| `DB_SSLMODE` | `disable` | 本机 compose 用 `disable`;**任何托管或跨主机部署应设 `require`**,需要校验证书时用 `verify-full` 并配 CA |
+
+**时区**:数据库**不要求**特定 `TimeZone` 参数,也不要求服务器时区是 `Asia/Shanghai`。所有"瞬时"列都是 `timestamptz`,写入与读取的瞬间值与会话时区无关;后端启动时会把会话时区钉在 `Asia/Shanghai`(`internal/db` 的 DSN),纯粹是为了让 `psql`、`pg_dump`、服务端 `now()` 渲染成北京时间、与日志一致。
+
+列类型策略(四类时间数据):真瞬时 → `timestamptz`;日粒度 → `date`;钟面时刻 → `time`;循环规则(如"每周一第 1-2 节")→ 整数序号,绝不物化成瞬时值。**不使用** naive `timestamp`(无时区)——驱动会给它挂假标签,Go 侧比较会静默错 8 小时。详见 `AGENTS.md` 的时区契约。
 
 ## 本地运行
 
 | 方式 | 命令 | 说明 |
 |------|------|------|
-| 最简 | `cd backend && APP_ENV=development go run .` | 需 MySQL 可达(默认 localhost:3306,ocm/ocm) |
+| 最简 | `cd backend && APP_ENV=development go run .` | 需 PostgreSQL 可达(默认 localhost:5432,ocm/ocm) |
 | 热更 | `cd backend && air` | `.air.toml`;`Dockerfile.dev` 即用此 |
-| 全栈 | `docker compose up -d`(仓库根) | mysql + backend(air) + web(vite) |
+| 全栈 | `docker compose up -d`(仓库根) | postgres + backend(air) + web(vite) |
 
 `APP_ENV=development` 允许 `DB_HOST` 缺省回落 localhost;生产模式(默认)拒绝回落。连接池调优:`DB_MAX_OPEN_CONNS`/`DB_MAX_IDLE_CONNS`/`DB_CONN_MAX_LIFETIME`(默认 25/25/5m)。
+
+## 横切约定(所有端点)
+
+- **鉴权**:`Authorization: Bearer <JWT>`(HS256、24h,无 refresh token)。公开端点仅 `login`/`wx-bind`/`wx-login`;小程序身份经后端 `code2Session` 解析 openid,`X-WX-OPENID` 头可伪造、永不信任。
+- **权限**:RBAC,handler 校验 permission 字符串(如 `course:manage`)而非角色名;有效权限 = 直接角色授权 ∪ 组角色授权 ∪ 直接授权(可带 `expires_at`,过期即失效);通配 `*` 仅系统 admin 角色持有,不在权限目录、API 无法授予。授权/撤销/过期**即时生效**(权限每请求实时计算)。权限目录在代码(`authz.Catalog`),`GET /api/permissions` 可查。
+- **分页/搜索**:列表接口统一信封 `{items, total, page, pageSize}`,参数 `page`/`page_size`(默认 100、上限 500)/`q`(ILIKE contains,大小写不敏感、已转义);导出与单条 GET 不分页。
+- **错误形状**:统一 `{"error": "<message>"}`;每个响应带 `X-Request-ID` 头,与日志行 `request_id` 同源——反馈问题时引用它可精确定位那一次请求(见[可观测性](/guide/observability))。
 
 ## 健康检查
 

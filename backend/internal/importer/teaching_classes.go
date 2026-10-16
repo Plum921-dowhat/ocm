@@ -249,7 +249,7 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 			// class is now in-use and its member set would change, skip the group.
 			var tcID int64
 			if err := tx.QueryRowContext(ctx,
-				`SELECT id FROM teaching_classes WHERE id = ? FOR UPDATE`, c.id,
+				`SELECT id FROM teaching_classes WHERE id = $1 FOR UPDATE`, c.id,
 			).Scan(&tcID); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "教学班已不存在（并发）"})
@@ -261,7 +261,7 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 			}
 			var inUseCount int
 			if err := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM course_offerings WHERE teaching_class_id = ? FOR UPDATE`, c.id,
+				`SELECT COUNT(*) FROM course_offerings WHERE teaching_class_id = $1 FOR UPDATE`, c.id,
 			).Scan(&inUseCount); err != nil {
 				res.FailedRows = groupCount
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
@@ -282,14 +282,14 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 				// member replace is safe; fall through to the write.
 			}
 			if _, err := tx.ExecContext(ctx,
-				`UPDATE teaching_classes SET name = ?, note = ? WHERE id = ?`,
+				`UPDATE teaching_classes SET name = $1, note = $2 WHERE id = $3`,
 				in.Name, in.Note, c.id); err != nil {
 				res.FailedRows = groupCount
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("update teaching class: %w", err)
 			}
 			if _, err := tx.ExecContext(ctx,
-				`DELETE FROM teaching_class_members WHERE teaching_class_id = ?`, c.id); err != nil {
+				`DELETE FROM teaching_class_members WHERE teaching_class_id = $1`, c.id); err != nil {
 				res.FailedRows = groupCount
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("clear members: %w", err)
@@ -301,8 +301,10 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 			}
 			succeeded++
 		} else {
-			res2, err := tx.ExecContext(ctx,
-				`INSERT INTO teaching_classes (name, note) VALUES (?, ?)`, in.Name, in.Note)
+			var id int64
+			err := tx.QueryRowContext(ctx,
+				`INSERT INTO teaching_classes (name, note) VALUES ($1, $2)
+				 RETURNING id`, in.Name, in.Note).Scan(&id)
 			if err != nil {
 				if dbutil.IsDuplicateEntry(err) {
 					// A teaching class of this name was created between preview
@@ -313,12 +315,6 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 				res.FailedRows = groupCount
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
 				return res, fmt.Errorf("insert teaching class: %w", err)
-			}
-			id, err := res2.LastInsertId()
-			if err != nil {
-				res.FailedRows = groupCount
-				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})
-				return res, fmt.Errorf("teaching class last insert id: %w", err)
 			}
 			if err := insertMembersTx(ctx, tx, id, in.ClassIDs); err != nil {
 				res.FailedRows = groupCount
@@ -341,7 +337,7 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 // insertMembersTx inserts teaching_class_members rows within tx.
 func insertMembersTx(ctx context.Context, tx *sql.Tx, teachingClassID int64, adminClassIDs []int64) error {
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO teaching_class_members (teaching_class_id, admin_class_id) VALUES (?, ?)`)
+		`INSERT INTO teaching_class_members (teaching_class_id, admin_class_id) VALUES ($1, $2)`)
 	if err != nil {
 		return fmt.Errorf("prepare member insert: %w", err)
 	}
@@ -358,7 +354,7 @@ func insertMembersTx(ctx context.Context, tx *sql.Tx, teachingClassID int64, adm
 // class within the write tx (for the in-use re-check), sorted.
 func teachingClassMembersTx(ctx context.Context, tx *sql.Tx, id int64) ([]int64, error) {
 	rows, err := tx.QueryContext(ctx,
-		`SELECT admin_class_id FROM teaching_class_members WHERE teaching_class_id = ?`, id)
+		`SELECT admin_class_id FROM teaching_class_members WHERE teaching_class_id = $1`, id)
 	if err != nil {
 		return nil, fmt.Errorf("query teaching class members: %w", err)
 	}

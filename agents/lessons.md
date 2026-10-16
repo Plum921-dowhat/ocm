@@ -22,8 +22,37 @@
   下 `COUNT(*) ... FOR UPDATE` 用间隙锁封住插入）。
 - **IN 列表分批**（约 1000 元组/批）：冲突预查全量 IN 在大文件下会撞包
   上限；sessions/bookings 的冲突查询均已分批，新写批量查询照抄。
-- **幂等迁移**：ALTER 忽略 1060/1061；**1062 故意不忽略**（数据级重复是
-  数据问题，不静默）；MySQL 错误消息解析收敛在 `dbutil`，不要散落拼字符串。
+- **幂等迁移**：`CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS` +
+  `ON CONFLICT DO NOTHING`；唯一冲突判断收敛在 `dbutil`（`IsDuplicateEntry`
+  / `DuplicateKeyName`），靠 **SQLSTATE 23505 + 约束名**结构化取用，不要解析
+  错误消息字符串（措辞一改就静默退化）。`ON CONFLICT (col)` 目标列上必须真有
+  唯一约束，否则是运行期报错而非编译期。
+
+## PostgreSQL（2026-10 自 MySQL 迁移）
+
+- **`?` → `$n` 不能只按字面量机械替换**：逐条件 `where += ` AND x = ?`` 的
+  动态片段，每个片段都从 `$1` 重新数起会撞号。规则：动态拼接一律走
+  `dbutil.Bind(&args, v)`（追加参数并返回占位符，编号由参数表长度导出），
+  IN 列表走 `dbutil.Placeholders(start, n)`。
+- **naive `timestamp` 是陷阱，禁用**：pgx 编码取 `time.Time` 的墙钟字段、
+  解码挂 `UTC` 标签，两端标签都是假的——`Equal/Before/Unix/JSON` 静默错 8 小时
+  且**不报错**，比 MySQL DATETIME（至少错得直观）更隐蔽；且写 `time.Now()`
+  的库内容会变成**部署时区的函数**。瞬时列一律 `timestamptz`，取墙钟用
+  `AT TIME ZONE`。
+- **PG 的 `LIKE` 大小写敏感**：MySQL utf8mb4 默认不敏感，迁移时漏改会
+  「搜索突然查不到」且无任何报错。用户输入搜索一律 `ILIKE`。
+- **墙钟单一写入方**：SQL `now()` 只用于只读比较，**不得**用于写时间列；
+  混用会让库内出现两种来源的墙钟（旧 MySQL 时代的 `NOW()` 写入列正是
+  「混合墙钟」唯一来源）。`ON UPDATE CURRENT_TIMESTAMP` 无对应物，补在
+  UPDATE 语句里。
+- **pgx 未识别 URL 参数按原名下发运行时参数，大小写敏感**：`TimeZone=…`
+  （libpq 写法）被静默忽略，必须写 GUC 真名 `timezone`。规则：这类"配置是否
+  真生效"的假设一律配一条集成测试（`TestSessionAnchorTookEffect` 就是拦下它的
+  钩子），别靠文档推断。
+- **同一 `$n` 不可复用于类型不同的两列**：报 `inconsistent types deduced for
+  parameter`；MySQL 会静默强转，迁移时这类语句要拆参数。
+- **`sqlx.Rebind` 是纯文本替换、不识别引号**：字符串字面量里的 `?`、jsonb 的
+  `?`/`?|`/`?&` 操作符都会被改坏。本项目因此保留裸 `$n`、不引 sqlx。
 
 ## 契约语义（勿当 bug 修）
 
@@ -52,3 +81,7 @@
   别用请求取消当信号。
 - shell 多层引号传中文 WHERE 会静默零行——中文条件进 SQL 用文件或参数化，
   别拼命令行。
+- **批量盘点别把 `cd` 写在并行命令里**：一条命令里 `cd X && rg PATTERN <相对路径>`
+  与另一条并行执行时，工作目录不保证按预期生效，grep 会跑在错目录、**返回空**
+  看起来像"零命中"。空结果尤其要复核（漏报比误报危险），跨目录盘点用绝对路径
+  或每条命令自带 `cd`。

@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestObserveSQLDBGauges(t *testing.T) {
 	// sql.Open is lazy: no dial happens, so Stats() answers without a server.
-	db, err := sql.Open("mysql", "u:p@/d")
+	db, err := sql.Open("pgx", "postgres://u:p@h/d")
 	if err != nil {
 		t.Fatal(err)
 	}
