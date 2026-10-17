@@ -51,8 +51,20 @@
   钩子），别靠文档推断。
 - **同一 `$n` 不可复用于类型不同的两列**：报 `inconsistent types deduced for
   parameter`；MySQL 会静默强转，迁移时这类语句要拆参数。
-- **`sqlx.Rebind` 是纯文本替换、不识别引号**：字符串字面量里的 `?`、jsonb 的
+- **`sqlx.Rebind` 是纯文本替换、不识别引号**：  字符串字面量里的 `?`、jsonb 的
   `?`/`?|`/`?&` 操作符都会被改坏。本项目因此保留裸 `$n`、不引 sqlx。
+- **`FOR UPDATE` 不能配聚合函数，且 PG 没有 gap lock**：迁移时把 MySQL 的
+  `SELECT COUNT(*) … FOR UPDATE`（靠 InnoDB gap lock 挡并发插入）原样保留，
+  PG 直接报 `FOR UPDATE is not allowed with aggregate functions`——教学班
+  update/delete 整条路由 500（codex review 抓到）。跨模块「父行锁」才是正确
+  形态：写方（Create/UpdateOffering）与检查方（Update/DeleteTeachingClass）
+  都在各自事务里 `SELECT … FROM 父表 WHERE id = $1 FOR UPDATE`，同一把行锁
+  串行化检查-写入；计数本身保持普通 SELECT。
+- **索引名是 schema 级命名空间（跨表唯一）**：`idx_user`/`idx_status` 这类
+  泛化名在 MySQL 是表级、在 PG 全局——后建的同名索引会被
+  `CREATE INDEX IF NOT EXISTS` **静默跳过**（零报错，索引从此不存在；
+  2026-10 实测 import_jobs 两枚、observations 一枚缺失）。一律
+  `idx_<表名>_<用途>` 具名；CI 有重名检查门禁兜底。
 
 ## 契约语义（勿当 bug 修）
 

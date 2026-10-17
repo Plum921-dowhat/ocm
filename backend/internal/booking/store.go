@@ -48,8 +48,13 @@ CREATE TABLE IF NOT EXISTS classroom_bookings (
     reviewed_at   TIMESTAMPTZ  NULL DEFAULT NULL
 )`,
 		`CREATE INDEX IF NOT EXISTS idx_room_date ON classroom_bookings (classroom_id, date)`,
-		`CREATE INDEX IF NOT EXISTS idx_user ON classroom_bookings (user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_status ON classroom_bookings (status)`,
+		`CREATE INDEX IF NOT EXISTS idx_booking_user ON classroom_bookings (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_booking_status ON classroom_bookings (status)`,
+		// PostgreSQL index names are schema-global; the old generic names
+		// collided with import_jobs/observations and made their index creation
+		// silently skip (agents/lessons.md). Superseded by idx_booking_*.
+		`DROP INDEX IF EXISTS idx_user`,
+		`DROP INDEX IF EXISTS idx_status`,
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("create classroom_bookings table: %w", err)

@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS observations (
 		`CREATE INDEX IF NOT EXISTS idx_observer_date ON observations (observer_id, observe_date)`,
 		`CREATE INDEX IF NOT EXISTS idx_course_date ON observations (course_id, observe_date)`,
 		`CREATE INDEX IF NOT EXISTS idx_classroom_date ON observations (classroom_id, observe_date)`,
-		`CREATE INDEX IF NOT EXISTS idx_status ON observations (status)`,
+		`CREATE INDEX IF NOT EXISTS idx_observation_status ON observations (status)`,
 		`CREATE INDEX IF NOT EXISTS idx_template_status ON observations (template_type, status)`,
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {

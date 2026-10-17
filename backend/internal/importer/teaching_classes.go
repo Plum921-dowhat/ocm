@@ -239,14 +239,16 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 			continue
 		}
 		if c.exists {
-			// Lock the teaching_classes row, then re-check the in-use freeze
-			// with a locking read. Lock order (teaching_classes -> course_offerings)
-			// matches the CRUD handler so a concurrent UpdateTeachingClass cannot
-			// deadlock against this tx. A class may have been referenced by a new
-			// offering between parse and commit; COUNT(*) ... FOR UPDATE
-			// gap-locks the teaching_class_id index range, serializing against a
-			// concurrent CreateOffering under InnoDB REPEATABLE READ. If the
-			// class is now in-use and its member set would change, skip the group.
+			// Lock the teaching_classes row, then re-check the in-use freeze.
+			// Lock order (teaching_classes -> course_offerings) matches the
+			// CRUD handlers so a concurrent UpdateTeachingClass cannot deadlock
+			// against this tx. A class may have been referenced by a new
+			// offering between parse and commit; offering creation takes this
+			// same row lock, so holding it serializes the recheck against a
+			// concurrent CreateOffering/UpdateOffering. If the class is now
+			// in-use and its member set would change, skip the group. (The
+			// count itself stays a plain SELECT — PostgreSQL forbids FOR UPDATE
+			// on aggregate queries.)
 			var tcID int64
 			if err := tx.QueryRowContext(ctx,
 				`SELECT id FROM teaching_classes WHERE id = $1 FOR UPDATE`, c.id,
@@ -261,7 +263,7 @@ func commitTeachingClasses(ctx context.Context, db *sql.DB, payload string) (Res
 			}
 			var inUseCount int
 			if err := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM course_offerings WHERE teaching_class_id = $1 FOR UPDATE`, c.id,
+				`SELECT COUNT(*) FROM course_offerings WHERE teaching_class_id = $1`, c.id,
 			).Scan(&inUseCount); err != nil {
 				res.FailedRows = groupCount
 				res.Errors = append(res.Errors, RowError{Row: c.rowNum, Error: "导入中断：" + err.Error()})

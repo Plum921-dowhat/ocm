@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS import_jobs (
     started_at     TIMESTAMPTZ NULL DEFAULT NULL,
     finished_at    TIMESTAMPTZ NULL DEFAULT NULL
 )`,
-		`CREATE INDEX IF NOT EXISTS idx_user ON import_jobs (user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_status ON import_jobs (status)`,
+		`CREATE INDEX IF NOT EXISTS idx_import_job_user ON import_jobs (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_import_job_status ON import_jobs (status)`,
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("create import_jobs table: %w", err)

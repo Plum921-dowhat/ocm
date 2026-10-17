@@ -375,18 +375,16 @@ func teachingClassMemberIDs(ctx context.Context, q dbtx, id int64) ([]int64, err
 // teaching class. Course offerings live in the course module; this is a
 // logical cross-module FK check (no Go dependency on the course package).
 //
-// When forUpdate is true the SELECT is a locking read that must run inside the
-// caller's transaction: under InnoDB's default REPEATABLE READ the gap lock it
-// takes on the teaching_class_id index blocks a concurrent CreateOffering
-// insert for the same class, closing the check-then-write TOCTOU that would
-// otherwise let an in-use class's members be changed.
-func teachingClassInUse(ctx context.Context, q dbtx, id int64, forUpdate bool) (bool, error) {
-	stmt := `SELECT COUNT(*) FROM course_offerings WHERE teaching_class_id = $1`
-	if forUpdate {
-		stmt += " FOR UPDATE"
-	}
+// Must run inside a transaction that already holds the teaching_classes row
+// lock (the SELECT ... FOR UPDATE the caller takes above) — that row lock,
+// shared with CreateOffering/UpdateOffering in the course module, is what
+// serializes the check-then-write TOCTOU. The count itself stays a plain
+// SELECT: PostgreSQL forbids FOR UPDATE on queries with aggregate functions,
+// and it has no gap locks to lean on (unlike the InnoDB design this replaced).
+func teachingClassInUse(ctx context.Context, q dbtx, id int64) (bool, error) {
 	var count int
-	if err := q.QueryRowContext(ctx, stmt, id).Scan(&count); err != nil {
+	if err := q.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM course_offerings WHERE teaching_class_id = $1`, id).Scan(&count); err != nil {
 		return false, fmt.Errorf("count offerings for teaching class: %w", err)
 	}
 	return count > 0, nil
@@ -481,14 +479,15 @@ func (s *Store) UpdateTeachingClass(ctx context.Context, id int64, in TeachingCl
 	// Hardening (decision 2): once a teaching class is referenced by any
 	// offering, its member set is frozen -- editing members would rewrite the
 	// class list shown on past offerings. To change membership, create a new
-	// teaching class. Name/note remain editable. The check + FOR UPDATE runs
-	// inside the tx so a concurrent CreateOffering cannot slip in between the
-	// check and the member rewrite.
+	// teaching class. Name/note remain editable. The check runs inside the tx
+	// while we hold the row lock taken above — CreateOffering/UpdateOffering
+	// take the same lock — so a concurrent offering insert cannot slip in
+	// between the check and the member rewrite.
 	current, err := teachingClassMemberIDs(ctx, tx, id)
 	if err != nil {
 		return TeachingClassView{}, err
 	}
-	inUse, err := teachingClassInUse(ctx, tx, id, true)
+	inUse, err := teachingClassInUse(ctx, tx, id)
 	if err != nil {
 		return TeachingClassView{}, err
 	}
@@ -530,10 +529,10 @@ func (s *Store) DeleteTeachingClass(ctx context.Context, id int64) error {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	// Lock the row + re-check in-use inside the tx (FOR UPDATE) so a concurrent
+	// Lock the row + re-check in-use inside the tx so a concurrent
 	// CreateOffering cannot make the class in-use between the check and the
-	// delete. The gap lock on course_offerings blocks the offering insert under
-	// InnoDB REPEATABLE READ.
+	// delete: both sides serialize on this same row lock (PostgreSQL has no
+	// gap locks; offending creation takes the lock too).
 	var tcID int64
 	if err := tx.QueryRowContext(ctx,
 		`SELECT id FROM teaching_classes WHERE id = $1 FOR UPDATE`, id).Scan(&tcID); err != nil {
@@ -542,7 +541,7 @@ func (s *Store) DeleteTeachingClass(ctx context.Context, id int64) error {
 		}
 		return fmt.Errorf("lock teaching class: %w", err)
 	}
-	inUse, err := teachingClassInUse(ctx, tx, id, true)
+	inUse, err := teachingClassInUse(ctx, tx, id)
 	if err != nil {
 		return err
 	}

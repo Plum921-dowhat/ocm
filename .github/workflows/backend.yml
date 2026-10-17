@@ -82,6 +82,18 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # PostgreSQL index names are schema-global: a duplicate name makes the
+      # later CREATE INDEX IF NOT EXISTS silently skip and the index never
+      # exists (see agents/lessons.md). Enforce table-specific names here.
+      - name: Index names unique (PostgreSQL schema-global)
+        run: |
+          dups=$(grep -rhoE 'CREATE (UNIQUE )?INDEX IF NOT EXISTS (idx_[a-z0-9_]+)' internal --include='*.go' \
+            | sed -E 's/.*IF NOT EXISTS //' | sort | uniq -d)
+          if [ -n "$dups" ]; then
+            echo "::error::duplicate index names (schema-global in PostgreSQL): $dups"
+            exit 1
+          fi
+
       - name: Build
         run: go build ./...
 
