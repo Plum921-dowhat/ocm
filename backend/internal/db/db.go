@@ -4,40 +4,46 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"ocm-backend/internal/logging"
+	"ocm-backend/internal/tz"
 )
 
 const (
 	defaultHost            = "localhost"
-	defaultPort            = "3306"
+	defaultPort            = "5432"
 	defaultUser            = "ocm"
 	defaultPassword        = "ocm"
 	defaultName            = "ocm"
+	defaultSSLMode         = "disable"
 	defaultMaxOpenConns    = 25
 	defaultMaxIdleConns    = 25
 	defaultConnMaxLifetime = 5 * time.Minute
 	pingInterval           = 2 * time.Second
 )
 
-// Config holds the settings needed to open a MySQL connection.
+// Config holds the settings needed to open a PostgreSQL connection.
 type Config struct {
 	Host            string
 	Port            string
 	User            string
 	Password        string
 	Name            string
+	SSLMode         string
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 }
 
-// ConfigFromEnv builds a Config from DB_* environment variables.
+// ConfigFromEnv builds a Config from DB_* environment variables. Defaults
+// match the development compose stack; every real deployment sets them.
 func ConfigFromEnv() Config {
 	return Config{
 		Host:            envOrDefault("DB_HOST", defaultHost),
@@ -45,28 +51,49 @@ func ConfigFromEnv() Config {
 		User:            envOrDefault("DB_USER", defaultUser),
 		Password:        envOrDefault("DB_PASSWORD", defaultPassword),
 		Name:            envOrDefault("DB_NAME", defaultName),
+		SSLMode:         envOrDefault("DB_SSLMODE", defaultSSLMode),
 		MaxOpenConns:    envIntOrDefault("DB_MAX_OPEN_CONNS", defaultMaxOpenConns),
 		MaxIdleConns:    envIntOrDefault("DB_MAX_IDLE_CONNS", defaultMaxIdleConns),
 		ConnMaxLifetime: envDurationOrDefault("DB_CONN_MAX_LIFETIME", defaultConnMaxLifetime),
 	}
 }
 
-// DSN renders a MySQL data source name. utf8mb4 enables full Unicode support
-// (including emoji) and parseTime maps MySQL timestamps to time.Time.
-// caching_sha2_password over plain TCP needs no extra flag: driver v1.10+
-// fetches the server public key automatically (the old
-// allowPublicKeyRetrieval parameter was removed and now fails as an unknown
-// system variable).
+// DSN renders a PostgreSQL connection URL for the pgx stdlib driver. The code
+// keeps talking to database/sql; only the driver and the SQL dialect change
+// (placeholders become $1..$n, see the store packages).
+//
+// timezone presets the session zone to the system anchor (Asia/Shanghai, see
+// internal/tz). This is hygiene, not correctness: instant columns are
+// timestamptz, so the instant they carry never depends on the session zone;
+// the anchor only makes server-side rendering (psql, pg_dump, now()) read as
+// Beijing wall clock, matching the logs and the operators' expectations.
+//
+// The key must be the lowercase GUC name: pgx forwards unrecognised URL
+// parameters as runtime parameters verbatim, so the libpq-style spelling
+// `TimeZone` is silently ignored (measured: the session stayed on the server
+// default). TestDSNPinsSessionAnchor plus the integration test
+// TestSessionAnchorTookEffect guard this.
 func (c Config) DSN() string {
-	return fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local",
-		c.User, c.Password, c.Host, c.Port, c.Name,
-	)
+	sslMode := c.SSLMode
+	if sslMode == "" {
+		sslMode = defaultSSLMode
+	}
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(c.User, c.Password),
+		Host:   net.JoinHostPort(c.Host, c.Port),
+		Path:   "/" + c.Name,
+	}
+	q := url.Values{}
+	q.Set("sslmode", sslMode)
+	q.Set("timezone", tz.Name)
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
-// New opens a MySQL connection pool, tunes it, and verifies reachability by
-// pinging until ctx is cancelled. Callers should pass a context with a timeout
-// so startup fails fast when the database is unreachable.
+// New opens a PostgreSQL connection pool, tunes it, and verifies reachability
+// by pinging until ctx is cancelled. Callers should pass a context with a
+// timeout so startup fails fast when the database is unreachable.
 func New(ctx context.Context, cfg Config) (*sql.DB, error) {
 	// Refuse to silently fall back to localhost outside development. Every
 	// real environment (compose, CI, serverless) sets DB_HOST; a missing value
@@ -76,9 +103,9 @@ func New(ctx context.Context, cfg Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("DB_HOST is required in production (APP_ENV=%q); refusing localhost fallback", appEnv())
 	}
 
-	d, err := sql.Open("mysql", cfg.DSN())
+	d, err := sql.Open("pgx", cfg.DSN())
 	if err != nil {
-		return nil, fmt.Errorf("open mysql: %w", err)
+		return nil, fmt.Errorf("open postgres: %w", err)
 	}
 
 	d.SetMaxOpenConns(cfg.MaxOpenConns)
@@ -87,7 +114,7 @@ func New(ctx context.Context, cfg Config) (*sql.DB, error) {
 
 	if err := pingWithRetry(ctx, d); err != nil {
 		_ = d.Close()
-		return nil, fmt.Errorf("ping mysql: %w", err)
+		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 
 	return d, nil

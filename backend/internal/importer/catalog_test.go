@@ -65,7 +65,7 @@ func TestParseCatalogMissingCodeColumn(t *testing.T) {
 }
 
 // 长度预检按 course_catalog 列宽（name 128 / code 64）逐行拒绝，
-// 而不是让 MySQL 1406 在 commit 时整事务回滚。
+// 而不是让 PostgreSQL 22001 在 commit 时整事务回滚。
 func TestParseCatalogOverlongFieldsRejected(t *testing.T) {
 	payload := catalogPayload(t, [][]any{
 		{strings.Repeat("课", 129), "TST201", 3.0, 48, "", "", ""},

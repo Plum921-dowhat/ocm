@@ -149,8 +149,8 @@ func commitCatalog(ctx context.Context, db *sql.DB, payload string) (Result, err
 	// Upsert key is code (the catalog identity). name is now mutable payload —
 	// the same course keeps its code while its display name gets refreshed.
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO course_catalog (name, code, credits, total_hours, category, exam_type, description)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON DUPLICATE KEY UPDATE name=VALUES(name), credits=VALUES(credits), total_hours=VALUES(total_hours), category=VALUES(category), exam_type=VALUES(exam_type), description=VALUES(description)`)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, credits=EXCLUDED.credits, total_hours=EXCLUDED.total_hours, category=EXCLUDED.category, exam_type=EXCLUDED.exam_type, description=EXCLUDED.description`)
 	if err != nil {
 		res.FailedRows = dataRows
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})

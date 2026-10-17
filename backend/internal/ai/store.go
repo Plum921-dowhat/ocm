@@ -14,21 +14,22 @@ type Store struct {
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
 // Migrate creates the single-row settings table and seeds the default row.
-// Idempotent, safe to run on every startup. INSERT IGNORE seeding never
-// overwrites values an admin changed.
+// Idempotent, safe to run on every startup. ON CONFLICT DO NOTHING seeding
+// never overwrites values an admin changed.
 func (s *Store) Migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS ai_settings (
-		    id         INT UNSIGNED NOT NULL PRIMARY KEY,
-		    enabled    TINYINT(1)   NOT NULL DEFAULT 0,
+		    id         INTEGER      PRIMARY KEY,
+		    enabled    BOOLEAN      NOT NULL DEFAULT false,
 		    base_url   VARCHAR(255) NOT NULL DEFAULT '',
 		    api_key    VARCHAR(255) NOT NULL DEFAULT '',
 		    model      VARCHAR(128) NOT NULL DEFAULT '',
-		    updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
+		    updated_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+		)`); err != nil {
 		return fmt.Errorf("ai migrate: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT IGNORE INTO ai_settings (id) VALUES (1)`); err != nil {
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO ai_settings (id) VALUES (1) ON CONFLICT DO NOTHING`); err != nil {
 		return fmt.Errorf("ai seed settings: %w", err)
 	}
 	return nil
@@ -57,7 +58,7 @@ func (s *Store) Get(ctx context.Context) (Settings, error) {
 func (s *Store) Update(ctx context.Context, in Settings) error {
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE ai_settings
-		 SET enabled = ?, base_url = ?, api_key = ?, model = ?
+		 SET enabled = $1, base_url = $2, api_key = $3, model = $4, updated_at = now()
 		 WHERE id = 1`,
 		in.Enabled, in.BaseURL, in.APIKey, in.Model); err != nil {
 		return fmt.Errorf("update ai settings: %w", err)

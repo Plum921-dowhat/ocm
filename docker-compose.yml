@@ -1,19 +1,24 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: ocm-mysql-dev
+  postgres:
+    image: postgres:17-alpine
+    container_name: ocm-postgres-dev
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=ocm
-      - MYSQL_USER=ocm
-      - MYSQL_PASSWORD=ocm
+      - POSTGRES_DB=ocm
+      - POSTGRES_USER=ocm
+      - POSTGRES_PASSWORD=ocm
+      # Wall-clock contract (see backend internal/db + internal/tz): instant
+      # columns are timestamptz, so their meaning never depends on the session
+      # zone. The zone is pinned to the Asia/Shanghai anchor anyway so that
+      # psql, pg_dump and server-side now() read as Beijing wall clock,
+      # matching the logs and the operators' expectations.
+      - TZ=Asia/Shanghai
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_dev_data:/var/lib/mysql
+      - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -32,8 +37,8 @@ services:
     environment:
       - PORT=8080
       - APP_ENV=development
-      - DB_HOST=mysql
-      - DB_PORT=3306
+      - DB_HOST=postgres
+      - DB_PORT=5432
       - DB_USER=ocm
       - DB_PASSWORD=ocm
       - DB_NAME=ocm
@@ -42,7 +47,7 @@ services:
       - WX_APP_ID=${WX_APP_ID:-}
       - WX_APP_SECRET=${WX_APP_SECRET:-}
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     command: air
 
@@ -70,4 +75,4 @@ services:
     command: npm run dev -- --host 0.0.0.0
 
 volumes:
-  mysql_dev_data:
+  postgres_dev_data:

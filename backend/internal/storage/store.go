@@ -14,26 +14,27 @@ type Store struct {
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
 // Migrate creates the single-row settings table and seeds the default row.
-// Idempotent, safe to run on every startup. INSERT IGNORE seeding never
-// overwrites values an admin changed.
+// Idempotent, safe to run on every startup. ON CONFLICT DO NOTHING seeding
+// never overwrites values an admin changed.
 func (s *Store) Migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS storage_settings (
-		    id              INT UNSIGNED NOT NULL PRIMARY KEY,
-		    enabled         TINYINT(1)   NOT NULL DEFAULT 0,
+		    id              INTEGER      PRIMARY KEY,
+		    enabled         BOOLEAN      NOT NULL DEFAULT false,
 		    endpoint        VARCHAR(255) NOT NULL DEFAULT '',
 		    region          VARCHAR(64)  NOT NULL DEFAULT '',
 		    bucket          VARCHAR(255) NOT NULL DEFAULT '',
 		    access_key      VARCHAR(255) NOT NULL DEFAULT '',
 		    secret_key      VARCHAR(255) NOT NULL DEFAULT '',
-		    use_ssl         TINYINT(1)   NOT NULL DEFAULT 1,
-		    use_path_style  TINYINT(1)   NOT NULL DEFAULT 1,
+		    use_ssl         BOOLEAN      NOT NULL DEFAULT true,
+		    use_path_style  BOOLEAN      NOT NULL DEFAULT true,
 		    public_base_url VARCHAR(255) NOT NULL DEFAULT '',
-		    updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
+		    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+		)`); err != nil {
 		return fmt.Errorf("storage migrate: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT IGNORE INTO storage_settings (id) VALUES (1)`); err != nil {
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO storage_settings (id) VALUES (1) ON CONFLICT DO NOTHING`); err != nil {
 		return fmt.Errorf("storage seed settings: %w", err)
 	}
 	return nil
@@ -64,8 +65,9 @@ func (s *Store) Get(ctx context.Context) (Settings, error) {
 func (s *Store) Update(ctx context.Context, in Settings) error {
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE storage_settings
-		 SET enabled = ?, endpoint = ?, region = ?, bucket = ?, access_key = ?,
-		     secret_key = ?, use_ssl = ?, use_path_style = ?, public_base_url = ?
+		 SET enabled = $1, endpoint = $2, region = $3, bucket = $4, access_key = $5,
+		     secret_key = $6, use_ssl = $7, use_path_style = $8, public_base_url = $9,
+		     updated_at = now()
 		 WHERE id = 1`,
 		in.Enabled, in.Endpoint, in.Region, in.Bucket, in.AccessKey, in.SecretKey,
 		in.UseSSL, in.UsePathStyle, in.PublicBaseURL); err != nil {

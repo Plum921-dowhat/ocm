@@ -1,21 +1,26 @@
 # Production compose. Provide credentials via a .env file or the real
 # environment, e.g.:
-#   MYSQL_ROOT_PASSWORD=...  DB_PASSWORD=...  JWT_SECRET=...  ADMIN_PASSWORD=...
-# DB_PASSWORD, MYSQL_ROOT_PASSWORD, JWT_SECRET and ADMIN_PASSWORD are required and will fail fast if unset.
+#   DB_PASSWORD=...  JWT_SECRET=...  ADMIN_PASSWORD=...
+# DB_PASSWORD, JWT_SECRET and ADMIN_PASSWORD are required and will fail fast if unset.
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: ocm-mysql-prod
+  postgres:
+    image: postgres:17-alpine
+    container_name: ocm-postgres-prod
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${DB_NAME:-ocm}
-      - MYSQL_USER=${DB_USER:-ocm}
-      - MYSQL_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME:-ocm}
+      - POSTGRES_USER=${DB_USER:-ocm}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD}
+      # Wall-clock contract (see backend internal/db + internal/tz): instant
+      # columns are timestamptz so their meaning never depends on the session
+      # zone; the zone is pinned to the Asia/Shanghai anchor so psql, pg_dump
+      # and server-side now() render as Beijing wall clock, matching the logs.
+      # TZ also puts the server's own log timestamps on Beijing time.
+      - TZ=Asia/Shanghai
     volumes:
-      - mysql_prod_data:/var/lib/mysql
+      - postgres_prod_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -30,18 +35,21 @@ services:
     environment:
       - PORT=8080
       - APP_ENV=production
-      - DB_HOST=mysql
-      - DB_PORT=3306
+      - DB_HOST=postgres
+      - DB_PORT=5432
       - DB_USER=${DB_USER:-ocm}
       - DB_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD}
       - DB_NAME=${DB_NAME:-ocm}
+      # Managed/long-haul PostgreSQL deployments flip this to require (or
+      # verify-full with DB_SSLMODE plus a CA); local compose stays on disable.
+      - DB_SSLMODE=${DB_SSLMODE:-disable}
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
       - BRAND_NAME=${BRAND_NAME:-OCM}
       - WX_APP_ID=${WX_APP_ID:-}
       - WX_APP_SECRET=${WX_APP_SECRET:-}
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
 
   web:
@@ -61,4 +69,4 @@ services:
       - NODE_ENV=production
 
 volumes:
-  mysql_prod_data:
+  postgres_prod_data:

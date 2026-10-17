@@ -56,7 +56,7 @@ func TestParseAdminClassesMissingGradeColumn(t *testing.T) {
 	}
 }
 
-// 长度预检把 MySQL 1406（Data too long，整事务回滚）降级为逐行拒绝。
+// 长度预检把 PostgreSQL 22001（value too long，整事务回滚）降级为逐行拒绝。
 func TestParseAdminClassesOverlongNameRejected(t *testing.T) {
 	payload := adminClassesPayload(t, [][]any{
 		{"2024", strings.Repeat("班", 65), ""},

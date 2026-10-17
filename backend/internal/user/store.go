@@ -8,7 +8,6 @@ import (
 
 	"ocm-backend/internal/dbutil"
 
-	"github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -58,9 +57,8 @@ func (s *Store) PageUsers(ctx context.Context, q string, p dbutil.Pagination) ([
 	where := ` WHERE 1=1`
 	var args []any
 	if q != "" {
-		where += ` AND (username LIKE ? OR display_name LIKE ?)`
 		pat := dbutil.LikePattern(dbutil.EscapeLike(q))
-		args = append(args, pat, pat)
+		where += ` AND (username ILIKE ` + dbutil.Bind(&args, pat) + ` OR display_name ILIKE ` + dbutil.Bind(&args, pat) + `)`
 	}
 	query, queryArgs := p.AppendLimit(
 		`SELECT id, username, display_name, user_type, created_at FROM users`+where+` ORDER BY id`, args)
@@ -91,7 +89,7 @@ func (s *Store) PageUsers(ctx context.Context, q string, p dbutil.Pagination) ([
 func (s *Store) GetByID(ctx context.Context, id int64) (User, error) {
 	var u User
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, display_name, user_type, created_at FROM users WHERE id = ?`, id,
+		`SELECT id, username, display_name, user_type, created_at FROM users WHERE id = $1`, id,
 	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.Type, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
@@ -105,7 +103,7 @@ func (s *Store) GetByID(ctx context.Context, id int64) (User, error) {
 func (s *Store) GetByUsername(ctx context.Context, username string) (User, error) {
 	var u User
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, display_name, user_type, created_at FROM users WHERE username = ?`, username,
+		`SELECT id, username, display_name, user_type, created_at FROM users WHERE username = $1`, username,
 	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.Type, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
@@ -121,27 +119,24 @@ func (s *Store) Create(ctx context.Context, in CreateUserInput) (User, error) {
 	if err != nil {
 		return User{}, fmt.Errorf("hash password: %w", err)
 	}
-	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, display_name, user_type) VALUES (?, ?, ?, ?)`,
+	var id int64
+	err = s.db.QueryRowContext(ctx,
+		`INSERT INTO users (username, password_hash, display_name, user_type) VALUES ($1, $2, $3, $4)
+		 RETURNING id`,
 		in.Username, string(hash), in.DisplayName, in.Type,
-	)
+	).Scan(&id)
 	if err != nil {
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+		if dbutil.IsDuplicateEntry(err) {
 			return User{}, ErrUsernameTaken
 		}
 		return User{}, fmt.Errorf("create user: %w", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return User{}, fmt.Errorf("create user last insert id: %w", err)
 	}
 	return s.GetByID(ctx, id)
 }
 
 func (s *Store) Update(ctx context.Context, id int64, in UpdateUserInput) (User, error) {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE users SET display_name = ?, user_type = ? WHERE id = ?`,
+		`UPDATE users SET display_name = $1, user_type = $2 WHERE id = $3`,
 		in.DisplayName, in.Type, id,
 	)
 	if err != nil {
@@ -156,7 +151,7 @@ func (s *Store) UpdatePassword(ctx context.Context, id int64, password string) e
 		return fmt.Errorf("hash password: %w", err)
 	}
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE users SET password_hash = ? WHERE id = ?`,
+		`UPDATE users SET password_hash = $1 WHERE id = $2`,
 		string(hash), id,
 	)
 	if err != nil {
@@ -173,7 +168,7 @@ func (s *Store) UpdatePassword(ctx context.Context, id int64, password string) e
 }
 
 func (s *Store) Delete(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}

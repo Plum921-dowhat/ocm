@@ -49,7 +49,7 @@ func (s *Store) ListStudents(ctx context.Context, adminClassID int64) ([]Student
 SELECT sp.user_id, u.username, u.display_name, sp.student_no, sp.admin_class_id, sp.note
 FROM student_profiles sp
 JOIN users u ON u.id = sp.user_id
-WHERE sp.admin_class_id = ?
+WHERE sp.admin_class_id = $1
 ORDER BY u.display_name, u.id`, adminClassID)
 	if err != nil {
 		return nil, fmt.Errorf("list students: %w", err)
@@ -78,7 +78,7 @@ ORDER BY u.display_name, u.id`, adminClassID)
 func (s *Store) AddStudent(ctx context.Context, adminClassID int64, in StudentProfileInput) (StudentProfileView, error) {
 	var userType string
 	if err := s.db.QueryRowContext(ctx,
-		`SELECT user_type FROM users WHERE id = ?`, in.UserID).Scan(&userType); err != nil {
+		`SELECT user_type FROM users WHERE id = $1`, in.UserID).Scan(&userType); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return StudentProfileView{}, ErrStudentNotFound
 		}
@@ -88,7 +88,7 @@ func (s *Store) AddStudent(ctx context.Context, adminClassID int64, in StudentPr
 		return StudentProfileView{}, ErrStudentNotStudent
 	}
 	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO student_profiles (user_id, admin_class_id, student_no, note) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO student_profiles (user_id, admin_class_id, student_no, note) VALUES ($1, $2, $3, $4)`,
 		in.UserID, adminClassID, strings.TrimSpace(in.StudentNo), strings.TrimSpace(in.Note)); err != nil {
 		if dbutil.IsDuplicateEntry(err) {
 			return StudentProfileView{}, ErrStudentAssigned
@@ -101,7 +101,7 @@ func (s *Store) AddStudent(ctx context.Context, adminClassID int64, in StudentPr
 // UpdateStudent updates the profile metadata (student no, note).
 func (s *Store) UpdateStudent(ctx context.Context, adminClassID, userID int64, in StudentProfileInput) (StudentProfileView, error) {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE student_profiles SET student_no = ?, note = ? WHERE admin_class_id = ? AND user_id = ?`,
+		`UPDATE student_profiles SET student_no = $1, note = $2 WHERE admin_class_id = $3 AND user_id = $4`,
 		strings.TrimSpace(in.StudentNo), strings.TrimSpace(in.Note), adminClassID, userID)
 	if err != nil {
 		return StudentProfileView{}, fmt.Errorf("update student: %w", err)
@@ -120,7 +120,7 @@ func (s *Store) UpdateStudent(ctx context.Context, adminClassID, userID int64, i
 // records are untouched (they store user_id only).
 func (s *Store) DeleteStudent(ctx context.Context, adminClassID, userID int64) error {
 	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM student_profiles WHERE admin_class_id = ? AND user_id = ?`, adminClassID, userID)
+		`DELETE FROM student_profiles WHERE admin_class_id = $1 AND user_id = $2`, adminClassID, userID)
 	if err != nil {
 		return fmt.Errorf("delete student: %w", err)
 	}
@@ -140,7 +140,7 @@ func (s *Store) getStudent(ctx context.Context, adminClassID, userID int64) (Stu
 SELECT sp.user_id, u.username, u.display_name, sp.student_no, sp.admin_class_id, sp.note
 FROM student_profiles sp
 JOIN users u ON u.id = sp.user_id
-WHERE sp.admin_class_id = ? AND sp.user_id = ?`, adminClassID, userID).
+WHERE sp.admin_class_id = $1 AND sp.user_id = $2`, adminClassID, userID).
 		Scan(&v.UserID, &v.Username, &v.DisplayName, &v.StudentNo, &v.AdminClassID, &v.Note)
 	if errors.Is(err, sql.ErrNoRows) {
 		return StudentProfileView{}, ErrStudentNotFound

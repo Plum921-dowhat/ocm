@@ -34,6 +34,25 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ocm
+          POSTGRES_USER: ocm
+          POSTGRES_PASSWORD: ocm
+          # Wall-clock contract (backend internal/db + internal/tz): instant
+          # columns are timestamptz, so their meaning never depends on the
+          # session zone; the zone is pinned to the Asia/Shanghai anchor so
+          # server-side rendering matches the logs.
+          TZ: Asia/Shanghai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ocm -d ocm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
 
     steps:
       - uses: actions/checkout@v4
@@ -63,19 +82,45 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # PostgreSQL index names are schema-global: a duplicate name makes the
+      # later CREATE INDEX IF NOT EXISTS silently skip and the index never
+      # exists (see agents/lessons.md). Enforce table-specific names here.
+      - name: Index names unique (PostgreSQL schema-global)
+        run: |
+          dups=$(grep -rhoE 'CREATE (UNIQUE )?INDEX IF NOT EXISTS (idx_[a-z0-9_]+)' internal --include='*.go' \
+            | sed -E 's/.*IF NOT EXISTS //' | sort | uniq -d)
+          if [ -n "$dups" ]; then
+            echo "::error::duplicate index names (schema-global in PostgreSQL): $dups"
+            exit 1
+          fi
+
       - name: Build
         run: go build ./...
 
       # Contract drift gate: regenerate the OpenAPI docs and fail if they
       # differ from the committed version (someone changed handlers/models
       # without running swag init).
+      # Do NOT add --parseDependency: it walks the go-list dependency tree,
+      # which drags in stdlib os/user — a second package named "user" whose
+      # User type collides with internal/user.User, making swag rename our
+      # schema to ocm-backend_internal_user.User (see agents/lessons.md).
       - name: Swagger docs drift
         run: |
-          go tool swag init -o docs --parseDependency --parseInternal --requiredByDefault
+          go tool swag init -o docs --requiredByDefault
           git diff --exit-code -- docs/
 
       - name: Test
         run: go test -race -coverprofile=coverage.out -v ./...
+
+      # Integration coverage for the connection layer and the wall-clock
+      # contract (session anchor + timestamptz instant round trip). These tests
+      # are behind the integration build tag, so the plain `go test ./...`
+      # above skips them — without this step the DSN anchor could regress
+      # unnoticed.
+      - name: DB foundation integration tests
+        run: go test -tags=integration -v ./internal/db/...
+        env:
+          DB_TEST_POSTGRES_DSN: 'postgres://ocm:ocm@127.0.0.1:5432/ocm?sslmode=disable'
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -120,17 +165,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     services:
-      mysql:
-        image: mysql:8.0
+      postgres:
+        image: postgres:17-alpine
         env:
-          MYSQL_ROOT_PASSWORD: ci-root-password
-          MYSQL_DATABASE: ocm
-          MYSQL_USER: ocm
-          MYSQL_PASSWORD: ocm
+          POSTGRES_DB: ocm
+          POSTGRES_USER: ocm
+          POSTGRES_PASSWORD: ocm
+          # Wall-clock contract (backend internal/db + internal/tz): the zone
+          # is pinned to the Asia/Shanghai anchor so server-side rendering
+          # matches the logs and the operators' expectations.
+          TZ: Asia/Shanghai
         ports:
-          - 3306:3306
+          - 5432:5432
         options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -u root -pci-root-password --silent"
+          --health-cmd "pg_isready -U ocm -d ocm"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -170,16 +218,17 @@ jobs:
           go test -tags=integration -v ./internal/iot/...
         env:
           IOT_TEST_MQTT_URL: tcp://127.0.0.1:1883
-          IOT_TEST_MYSQL_DSN: 'root:ci-root-password@tcp(127.0.0.1:3306)/ocm?parseTime=true'
+          IOT_TEST_POSTGRES_DSN: 'postgres://ocm:ocm@127.0.0.1:5432/ocm?sslmode=disable'
 
       - name: Run & readiness check
         run: |
           docker run -d --name ocm-backend-ci --network host \
             -e DB_HOST=127.0.0.1 \
-            -e DB_PORT=3306 \
+            -e DB_PORT=5432 \
             -e DB_USER=ocm \
             -e DB_PASSWORD=ocm \
             -e DB_NAME=ocm \
+            -e DB_SSLMODE=disable \
             ocm-backend:ci
           for i in $(seq 1 40); do
             if curl -sf http://localhost:8080/readyz; then echo; break; fi

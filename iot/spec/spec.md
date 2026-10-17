@@ -151,7 +151,7 @@ queued → delivered → acked | failed
 - 设备侧 SDK：`iot/mqttc`（连接/重连/最新态重放/FIFO 缓冲/命令订阅与 ack）
 - 可执行样例与开发工具：`iot/sim` + `cmd/iot-sim`（虚拟教室）
 - 契约一致性由 e2e 集成测试保证（`go test -tags=integration`，CI 中对
-  真 broker + 真 MySQL 运行）。
+  真 broker + 真 PostgreSQL 运行）。
 
 ## 11. 教室节点模式（推荐的部署形态）
 

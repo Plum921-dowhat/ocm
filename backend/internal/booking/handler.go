@@ -53,7 +53,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, authenticate func(http.Hand
 // bookingFilter builds a ListFilter from the query string, shared by list and
 // export so an export respects the same classroom/status/date filters the
 // operator is currently viewing. from/to must be YYYY-MM-DD; anything else is
-// rejected so MySQL does not silently coerce garbage like "abc" to 0000-00-00.
+// rejected by the database rather than silently coerced to a bogus date (MySQL
+// did that; PostgreSQL raises 22008 invalid_datetime_format).
 func bookingFilter(r *http.Request) (ListFilter, error) {
 	q := r.URL.Query()
 	classroomID, _ := strconv.ParseInt(q.Get("classroom_id"), 10, 64)

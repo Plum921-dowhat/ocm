@@ -37,6 +37,7 @@ import (
 	"ocm-backend/internal/schedule"
 	"ocm-backend/internal/storage"
 	"ocm-backend/internal/systemlog"
+	"ocm-backend/internal/tz"
 	"ocm-backend/internal/user"
 )
 
@@ -50,6 +51,13 @@ import (
 // @name Authorization
 // @description "JWT Bearer token; prefix with 'Bearer '."
 func main() {
+	// Pin the process clock to China Standard Time before anything reads it:
+	// civil dates ("today", regime selection, AI prompts, future cron
+	// schedules such as unlock-before-class) and the wall clock must follow
+	// Beijing time on every host, including UTC-defaulting containers. See
+	// internal/tz for the wall-clock contract.
+	tz.SetLocal()
+
 	// Structured terminal logging for developers and operators (business audit
 	// records live in system_logs, see internal/systemlog). Must run before
 	// anything logs.
@@ -412,7 +420,7 @@ func main() {
 func openDB(ctx context.Context) (*sql.DB, error) {
 	cfg := db.ConfigFromEnv()
 
-	// Give MySQL up to 60s to become reachable on startup.
+	// Give PostgreSQL up to 60s to become reachable on startup.
 	connectCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 

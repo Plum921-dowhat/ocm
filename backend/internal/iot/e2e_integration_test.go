@@ -1,6 +1,6 @@
 //go:build integration
 
-// Data-plane e2e for OCM IoT: a real broker + a real MySQL, the contract
+// Data-plane e2e for OCM IoT: a real broker + a real PostgreSQL, the contract
 // between backend/internal/iot and the device-side SDK exercised end to end
 // (a fake device here plays the role the ocm-iot simulator plays in demos —
 // the backend module cannot import ocm-iot, see WP-2 notes).
@@ -8,7 +8,7 @@
 // Run locally against a SCRATCH database:
 //
 //	IOT_TEST_MQTT_URL=tcp://localhost:1883 \
-//	IOT_TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/iot_e2e?parseTime=true' \
+//	IOT_TEST_POSTGRES_DSN='postgres://postgres:root@127.0.0.1:5432/iot_e2e?sslmode=disable' \
 //	go test -tags=integration ./internal/iot/...
 //
 // The test DROPS the iot_* tables in the target database and recreates them.
@@ -26,6 +26,9 @@ import (
 	"time"
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
+	// This external test package opens its own handle, so it must register the
+	// pgx database/sql driver itself (internal/db is not imported here).
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"ocm-backend/internal/dbutil"
 	"ocm-backend/internal/iot"
@@ -47,14 +50,14 @@ const (
 
 func TestIoTDataPlaneE2E(t *testing.T) {
 	brokerURL := envOr(t, "IOT_TEST_MQTT_URL")
-	dsn := envOr(t, "IOT_TEST_MYSQL_DSN")
+	dsn := envOr(t, "IOT_TEST_POSTGRES_DSN")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db, err := sql.Open("mysql", dsn)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatalf("open mysql: %v", err)
+		t.Fatalf("open postgres: %v", err)
 	}
 	defer func() { _ = db.Close() }()
 	db.SetMaxOpenConns(4)

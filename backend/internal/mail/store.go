@@ -14,25 +14,26 @@ type Store struct {
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
 // Migrate creates the single-row settings table and seeds the default row.
-// Idempotent, safe to run on every startup. INSERT IGNORE seeding never
-// overwrites values an admin changed.
+// Idempotent, safe to run on every startup. ON CONFLICT DO NOTHING seeding
+// never overwrites values an admin changed.
 func (s *Store) Migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS mail_settings (
-		    id           INT UNSIGNED NOT NULL PRIMARY KEY,
-		    enabled      TINYINT(1)   NOT NULL DEFAULT 0,
+		    id           INTEGER      PRIMARY KEY,
+		    enabled      BOOLEAN      NOT NULL DEFAULT false,
 		    host         VARCHAR(255) NOT NULL DEFAULT '',
-		    port         INT          NOT NULL DEFAULT 465,
+		    port         INTEGER      NOT NULL DEFAULT 465,
 		    username     VARCHAR(255) NOT NULL DEFAULT '',
 		    password     VARCHAR(255) NOT NULL DEFAULT '',
 		    from_name    VARCHAR(255) NOT NULL DEFAULT '',
 		    from_address VARCHAR(255) NOT NULL DEFAULT '',
 		    encryption   VARCHAR(16)  NOT NULL DEFAULT 'ssl',
-		    updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
+		    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+		)`); err != nil {
 		return fmt.Errorf("mail migrate: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT IGNORE INTO mail_settings (id) VALUES (1)`); err != nil {
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO mail_settings (id) VALUES (1) ON CONFLICT DO NOTHING`); err != nil {
 		return fmt.Errorf("mail seed settings: %w", err)
 	}
 	return nil
@@ -62,8 +63,8 @@ func (s *Store) Get(ctx context.Context) (Settings, error) {
 func (s *Store) Update(ctx context.Context, in Settings) error {
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE mail_settings
-		 SET enabled = ?, host = ?, port = ?, username = ?, password = ?,
-		     from_name = ?, from_address = ?, encryption = ?
+		 SET enabled = $1, host = $2, port = $3, username = $4, password = $5,
+		     from_name = $6, from_address = $7, encryption = $8, updated_at = now()
 		 WHERE id = 1`,
 		in.Enabled, in.Host, in.Port, in.Username, in.Password,
 		in.FromName, in.FromAddress, in.Encryption); err != nil {

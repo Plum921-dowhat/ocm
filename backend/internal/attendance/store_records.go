@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"ocm-backend/internal/dbutil"
 )
@@ -31,13 +32,11 @@ func (s *Store) PageRecords(ctx context.Context, checkinID int64, f RecordFilter
 
 	where := ` WHERE 1=1`
 	if f.Status != "" {
-		where += ` AND t.status = ?`
-		args = append(args, f.Status)
+		where += ` AND t.status = ` + dbutil.Bind(&args, f.Status)
 	}
 	if f.Q != "" {
-		where += ` AND (t.display_name LIKE ? OR t.student_no LIKE ?)`
 		pat := dbutil.LikePattern(dbutil.EscapeLike(f.Q))
-		args = append(args, pat, pat)
+		where += ` AND (t.display_name ILIKE ` + dbutil.Bind(&args, pat) + ` OR t.student_no ILIKE ` + dbutil.Bind(&args, pat) + `)`
 	}
 
 	total, err := dbutil.CountRows(ctx, s.db, `FROM (`+inner+`) t`+where, args)
@@ -69,8 +68,12 @@ func (s *Store) ListRecordsAll(ctx context.Context, checkinID int64) ([]CheckinR
 // recordUnionSQL builds the UNION of roster rows and extra record rows as a
 // subquery over table alias t. offeringID 0 disables both branches' roster
 // joins naturally (no offering row has id 0): the roster branch yields nothing
-// and every record lands in the extra branch. Bind order:
-// roster(checkinID, offeringID), extra(checkinID, offeringID).
+// and every record lands in the extra branch.
+//
+// The two branches share the same two values, and PostgreSQL numbers
+// parameters by position rather than by occurrence, so the fragment declares
+// $1/$2 and binds exactly TWO args while MySQL's positional '?' needed four
+// copies. Callers continue numbering from len(args)+1 (see dbutil.Bind).
 func recordUnionSQL(checkinID, offeringID int64) (string, []any) {
 	roster := `
     SELECT u.id AS user_id, u.display_name, COALESCE(sp.student_no, '') AS student_no,
@@ -81,8 +84,8 @@ func recordUnionSQL(checkinID, offeringID int64) (string, []any) {
     JOIN admin_classes ac ON ac.id = sp.admin_class_id
     JOIN teaching_class_members tcm ON tcm.admin_class_id = sp.admin_class_id
     JOIN course_offerings o ON o.teaching_class_id = tcm.teaching_class_id
-    LEFT JOIN checkin_records r ON r.checkin_id = ? AND r.user_id = sp.user_id
-    WHERE o.id = ?`
+    LEFT JOIN checkin_records r ON r.checkin_id = $1 AND r.user_id = sp.user_id
+    WHERE o.id = $2`
 	extra := `
     SELECT u.id AS user_id, u.display_name, COALESCE(sp.student_no, '') AS student_no,
            COALESCE(ac.grade, ''), COALESCE(ac.name, ''),
@@ -91,14 +94,14 @@ func recordUnionSQL(checkinID, offeringID int64) (string, []any) {
     JOIN users u ON u.id = r.user_id
     LEFT JOIN student_profiles sp ON sp.user_id = r.user_id
     LEFT JOIN admin_classes ac ON ac.id = sp.admin_class_id
-    WHERE r.checkin_id = ? AND NOT EXISTS (
+    WHERE r.checkin_id = $1 AND NOT EXISTS (
         SELECT 1 FROM student_profiles sp2
         JOIN teaching_class_members tcm2 ON tcm2.admin_class_id = sp2.admin_class_id
-        JOIN course_offerings o2 ON o2.teaching_class_id = tcm2.teaching_class_id AND o2.id = ?
+        JOIN course_offerings o2 ON o2.teaching_class_id = tcm2.teaching_class_id AND o2.id = $2
         WHERE sp2.user_id = r.user_id
     )`
 	return roster + ` UNION ALL ` + extra,
-		[]any{checkinID, offeringID, checkinID, offeringID}
+		[]any{checkinID, offeringID}
 }
 
 func scanRecordRows(rows *sql.Rows, noRoster bool) ([]CheckinRecordView, error) {
@@ -140,7 +143,7 @@ func (s *Store) UpsertRecord(ctx context.Context, checkinID, userID int64, statu
 		return CheckinRecordView{}, err
 	}
 	var one int64
-	if err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE id = ?`, userID).Scan(&one); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE id = $1`, userID).Scan(&one); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return CheckinRecordView{}, ErrStudentNotFound
 		}
@@ -149,9 +152,10 @@ func (s *Store) UpsertRecord(ctx context.Context, checkinID, userID int64, statu
 
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO checkin_records (checkin_id, user_id, status, checked_at, modified_by, modified_at)
-VALUES (?, ?, ?, NULL, ?, NOW())
-ON DUPLICATE KEY UPDATE status = ?, modified_by = ?, modified_at = NOW()`,
-		checkinID, userID, status, modifiedBy, status, modifiedBy); err != nil {
+VALUES ($1, $2, $3, NULL, $4, $5)
+ON CONFLICT ON CONSTRAINT uq_checkin_user DO UPDATE
+SET status = EXCLUDED.status, modified_by = EXCLUDED.modified_by, modified_at = EXCLUDED.modified_at`,
+		checkinID, userID, status, modifiedBy, time.Now()); err != nil {
 		return CheckinRecordView{}, fmt.Errorf("upsert checkin record: %w", err)
 	}
 
@@ -166,8 +170,8 @@ SELECT u.display_name, COALESCE(sp.student_no, ''), ac.grade, ac.name, r.status,
 FROM users u
 LEFT JOIN student_profiles sp ON sp.user_id = u.id
 LEFT JOIN admin_classes ac ON ac.id = sp.admin_class_id
-JOIN checkin_records r ON r.checkin_id = ? AND r.user_id = u.id
-WHERE u.id = ?`, checkinID, userID).Scan(
+JOIN checkin_records r ON r.checkin_id = $1 AND r.user_id = u.id
+WHERE u.id = $2`, checkinID, userID).Scan(
 		&v.DisplayName, &v.StudentNo, &grade, &name, &v.Status, &checkedAt, &modifiedAt); err != nil {
 		return CheckinRecordView{}, fmt.Errorf("load upserted checkin record: %w", err)
 	}
@@ -200,7 +204,7 @@ SELECT c.name, tc.name, o.semester, o.teacher
 FROM course_offerings o
 JOIN course_catalog c ON c.id = o.catalog_id
 JOIN teaching_classes tc ON tc.id = o.teaching_class_id
-WHERE o.id = ?`, offeringID).Scan(&out.CourseName, &out.TeachingClassName, &out.Semester, &out.Teacher); err != nil {
+WHERE o.id = $1`, offeringID).Scan(&out.CourseName, &out.TeachingClassName, &out.Semester, &out.Teacher); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return OfferingSummary{}, ErrCheckinNotFound
 		}
@@ -225,7 +229,7 @@ JOIN users u ON u.id = sp.user_id
 JOIN admin_classes ac ON ac.id = sp.admin_class_id
 JOIN teaching_class_members tcm ON tcm.admin_class_id = sp.admin_class_id
 JOIN course_offerings o ON o.teaching_class_id = tcm.teaching_class_id
-WHERE o.id = ?
+WHERE o.id = $1
 ORDER BY ac.grade, ac.name, u.display_name`, offeringID)
 	if err != nil {
 		return OfferingSummary{}, fmt.Errorf("summary roster: %w", err)
@@ -249,20 +253,27 @@ ORDER BY ac.grade, ac.name, u.display_name`, offeringID)
 	}
 
 	// Students holding records in one of the checkins but outside the roster.
+	//
+	// One row per user: the GROUP BY list repeats every selected column
+	// because PostgreSQL rejects the loose grouping MySQL allowed (a bare
+	// GROUP BY u.id with non-aggregated columns from student_profiles /
+	// admin_classes is SQLSTATE 42803). There is exactly one profile and one
+	// admin class per user — student_profiles has UNIQUE(user_id) — so this
+	// collapses duplicate checkin_records rows without picking arbitrarily.
 	rows, err = s.db.QueryContext(ctx, `
 SELECT u.id, u.display_name, COALESCE(sp.student_no, ''), COALESCE(ac.grade, ''), COALESCE(ac.name, '')
 FROM checkin_records r
-JOIN checkins c ON c.id = r.checkin_id AND c.offering_id = ?
+JOIN checkins c ON c.id = r.checkin_id AND c.offering_id = $1
 JOIN users u ON u.id = r.user_id
 LEFT JOIN student_profiles sp ON sp.user_id = u.id
 LEFT JOIN admin_classes ac ON ac.id = sp.admin_class_id
 WHERE NOT EXISTS (
     SELECT 1 FROM student_profiles sp2
     JOIN teaching_class_members tcm2 ON tcm2.admin_class_id = sp2.admin_class_id
-    JOIN course_offerings o2 ON o2.teaching_class_id = tcm2.teaching_class_id AND o2.id = ?
+    JOIN course_offerings o2 ON o2.teaching_class_id = tcm2.teaching_class_id AND o2.id = $2
     WHERE sp2.user_id = r.user_id
 )
-GROUP BY u.id`, offeringID, offeringID)
+GROUP BY u.id, u.display_name, sp.student_no, ac.grade, ac.name`, offeringID, offeringID)
 	if err != nil {
 		return OfferingSummary{}, fmt.Errorf("summary extra students: %w", err)
 	}
@@ -337,7 +348,7 @@ GROUP BY u.id`, offeringID, offeringID)
 func (s *Store) PageMyCheckins(ctx context.Context, userID int64, p dbutil.Pagination) ([]MyCheckinView, int64, error) {
 	from := `
 FROM checkins chk
-JOIN checkin_records r ON r.checkin_id = chk.id AND r.user_id = ?
+JOIN checkin_records r ON r.checkin_id = chk.id AND r.user_id = $1
 LEFT JOIN course_offerings o ON o.id = chk.offering_id
 LEFT JOIN course_catalog c ON c.id = o.catalog_id
 LEFT JOIN teaching_classes tc ON tc.id = o.teaching_class_id

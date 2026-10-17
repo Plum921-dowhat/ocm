@@ -281,17 +281,17 @@ func commitOfferings(ctx context.Context, db *sql.DB, catalog map[string]catalog
 	// columns (teacher + 教务处 section metadata + note) are refreshed on conflict.
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO course_offerings
 	(catalog_id, teaching_class_id, teacher, course_seq, teacher_id, teacher_title, college, max_students, requirement, weekly_hours, semester, note)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	ON DUPLICATE KEY UPDATE
-		teacher = VALUES(teacher),
-		course_seq = VALUES(course_seq),
-		teacher_id = VALUES(teacher_id),
-		teacher_title = VALUES(teacher_title),
-		college = VALUES(college),
-		max_students = VALUES(max_students),
-		requirement = VALUES(requirement),
-		weekly_hours = VALUES(weekly_hours),
-		note = VALUES(note)`)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	ON CONFLICT (catalog_id, teaching_class_id, semester) DO UPDATE SET
+		teacher = EXCLUDED.teacher,
+		course_seq = EXCLUDED.course_seq,
+		teacher_id = EXCLUDED.teacher_id,
+		teacher_title = EXCLUDED.teacher_title,
+		college = EXCLUDED.college,
+		max_students = EXCLUDED.max_students,
+		requirement = EXCLUDED.requirement,
+		weekly_hours = EXCLUDED.weekly_hours,
+		note = EXCLUDED.note`)
 	if err != nil {
 		res.FailedRows = dataRows
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})

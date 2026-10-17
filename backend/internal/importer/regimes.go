@@ -193,12 +193,14 @@ func commitRegimes(ctx context.Context, db *sql.DB, payload string) (Result, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Upsert the regime and resolve its id in one statement: ON DUPLICATE KEY
-	// UPDATE id=LAST_INSERT_ID(id) makes LastInsertId return the existing id on
-	// update, so the subsequent period replacement targets the right regime.
+	// Upsert the regime and resolve its id in one statement: RETURNING id
+	// yields the new row's id on insert and the existing row's id on the
+	// DO UPDATE branch, so the subsequent period replacement always targets
+	// the right regime. (MySQL needed the LAST_INSERT_ID(id) trick for this.)
 	upsertStmt, err := tx.PrepareContext(ctx, `INSERT INTO schedule_regimes (name, effective_month, effective_day)
-VALUES (?, ?, ?)
-ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), effective_month=VALUES(effective_month), effective_day=VALUES(effective_day)`)
+VALUES ($1, $2, $3)
+ON CONFLICT (name) DO UPDATE SET effective_month=EXCLUDED.effective_month, effective_day=EXCLUDED.effective_day
+RETURNING id`)
 	if err != nil {
 		res.FailedRows = groupCount
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})
@@ -206,7 +208,7 @@ ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), effective_month=VALUES(effective_
 	}
 	defer func() { _ = upsertStmt.Close() }()
 
-	delStmt, err := tx.PrepareContext(ctx, `DELETE FROM schedule_periods WHERE regime_id = ?`)
+	delStmt, err := tx.PrepareContext(ctx, `DELETE FROM schedule_periods WHERE regime_id = $1`)
 	if err != nil {
 		res.FailedRows = groupCount
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})
@@ -214,7 +216,7 @@ ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), effective_month=VALUES(effective_
 	}
 	defer func() { _ = delStmt.Close() }()
 
-	insStmt, err := tx.PrepareContext(ctx, `INSERT INTO schedule_periods (regime_id, period_index, start_time, end_time) VALUES (?, ?, ?, ?)`)
+	insStmt, err := tx.PrepareContext(ctx, `INSERT INTO schedule_periods (regime_id, period_index, start_time, end_time) VALUES ($1, $2, $3, $4)`)
 	if err != nil {
 		res.FailedRows = groupCount
 		res.Errors = append(res.Errors, RowError{Row: 0, Error: "导入中断：" + err.Error()})
@@ -223,17 +225,11 @@ ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), effective_month=VALUES(effective_
 	defer func() { _ = insStmt.Close() }()
 
 	for _, r := range clean {
-		r2, err := upsertStmt.ExecContext(ctx, r.name, r.month, r.day)
-		if err != nil {
+		var regimeID int64
+		if err := upsertStmt.QueryRowContext(ctx, r.name, r.month, r.day).Scan(&regimeID); err != nil {
 			res.FailedRows = groupCount
 			res.Errors = append(res.Errors, RowError{Row: r.rowNum, Error: "导入中断：" + err.Error()})
 			return res, fmt.Errorf("upsert regime: %w", err)
-		}
-		regimeID, err := r2.LastInsertId()
-		if err != nil {
-			res.FailedRows = groupCount
-			res.Errors = append(res.Errors, RowError{Row: r.rowNum, Error: "导入中断：" + err.Error()})
-			return res, fmt.Errorf("regime last insert id: %w", err)
 		}
 		if _, err := delStmt.ExecContext(ctx, regimeID); err != nil {
 			res.FailedRows = groupCount
