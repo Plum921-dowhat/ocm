@@ -1,4 +1,4 @@
-module ocm-iot
+module github.com/zyang4418/ocm/iot
 
 go 1.26
 

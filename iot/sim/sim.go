@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"ocm-iot/mqttc"
+	"github.com/zyang4418/ocm/iot/mqttc"
 )
 
 // Device categories published by the simulator. Attrs are intentionally

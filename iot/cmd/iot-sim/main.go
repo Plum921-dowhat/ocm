@@ -18,8 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	"ocm-iot/mqttc"
-	"ocm-iot/sim"
+	"github.com/zyang4418/ocm/iot/mqttc"
+	"github.com/zyang4418/ocm/iot/sim"
 )
 
 func main() {

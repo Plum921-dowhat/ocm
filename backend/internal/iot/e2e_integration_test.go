@@ -2,8 +2,8 @@
 
 // Data-plane e2e for OCM IoT: a real broker + a real PostgreSQL, the contract
 // between backend/internal/iot and the device-side SDK exercised end to end
-// (a fake device here plays the role the ocm-iot simulator plays in demos —
-// the backend module cannot import ocm-iot, see WP-2 notes).
+// (a fake device here plays the role the iot/ simulator plays in demos —
+// the backend module cannot import ocm/iot, see WP-2 notes).
 //
 // Run locally against a SCRATCH database:
 //
