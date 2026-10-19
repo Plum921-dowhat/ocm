@@ -1,33 +1,19 @@
 .page {
   display: flex;
   flex-direction: column;
+  /* 自定义导航栏走 .page 内部文档流（app-navbar 自带状态栏留白与高度），
+     这里只剩原生 tabBar 在视口之外被 100vh 扣除 */
   height: 100vh;
-  /* 自定义 tabBar:100vh 已含 tabBar 区域,与内联 padding-top 一起按 border-box 计,
-     否则根节点高出视口、底部内容被 tabBar 遮住 */
   box-sizing: border-box;
   background: var(--color-bg);
-}
-
-.nav-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 88rpx;
-  background: #FFFFFF;
-}
-
-.nav-title {
-  font-size: var(--font-lg);
-  font-weight: 700;
-  color: var(--color-text);
 }
 
 .scroll-content {
   flex: 1;
   /* flex 子项默认 min-height:auto,内容高会撑破固定高容器,须显式清零 */
   min-height: 0;
-  /* 自定义 tabBar 不再占据视口,留出 tabBar(100rpx)+安全区高度,避免末行被遮挡 */
-  padding-bottom: calc(100rpx + env(safe-area-inset-bottom));
+  /* 原生 tabBar 已在视口外;底部留 16px 与页面节奏一致 */
+  padding-bottom: var(--space-md);
   box-sizing: border-box;
 }
 

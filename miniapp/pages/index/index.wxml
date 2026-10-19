@@ -1,14 +1,6 @@
-<view class="page" style="padding-top: {{statusBarHeight}}px">
+<view class="page">
 
-  <!-- 自定义导航栏 -->
-  <view class="nav-bar">
-    <view class="nav-left">
-      <image class="nav-scan-icon" src="/assets/icons/nav_scan.png" mode="aspectFit" />
-    </view>
-    <text class="nav-title">首页</text>
-    <view class="nav-right"></view>
-  </view>
-
+  <app-navbar class="app-navbar" title="首页" />
   <scroll-view type="custom" scroll-y class="scroll-content">
 
     <!-- 搜索栏 -->
@@ -54,7 +46,7 @@
         </view>
         <view class="notice-content">
           <text class="notice-title">系统通知</text>
-          <text class="notice-desc">OCM v1.0 全新智慧教室管理体验已上线</text>
+          <text class="notice-desc">{{brand.name}} v1.0 全新{{brand.titleCloud}}体验已上线</text>
         </view>
         <view class="notice-arrow"></view>
       </view>

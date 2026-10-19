@@ -1,6 +1,5 @@
 <view class="page">
-  <t-navbar title="教室管理" left-arrow fixed placeholder />
-
+  <app-navbar class="app-navbar" title="教室管理" />
   <view class="search-row">
     <input
       class="search-input"

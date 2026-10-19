@@ -1,6 +1,6 @@
 {
+  "navigationBarTitleText": "数据导入",
   "usingComponents": {
-    "t-navbar": "tdesign-miniprogram/navbar/navbar",
     "form-dialog": "/components/form-dialog/form-dialog",
     "status-tag": "/components/status-tag/status-tag",
     "empty-state": "/components/empty-state/empty-state",

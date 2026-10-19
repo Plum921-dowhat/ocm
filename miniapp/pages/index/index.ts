@@ -1,5 +1,5 @@
 import { ensureAuth, getUser } from '../../utils/auth'
-import { getNavInfo } from '../../utils/nav'
+import { brand } from '../../config/brand'
 import { can, canAny } from '../../utils/perms'
 import { request } from '../../utils/request'
 import { today, periodLabel } from '../../utils/format'
@@ -16,7 +16,7 @@ interface Booking {
 
 Page({
   data: {
-    statusBarHeight: getNavInfo().statusBarHeight,
+    brand,
     // 快入口:url 非空且权限通过则跳转,否则保留 toast
     quickItems: [
       { type: '课表查询', icon: '/assets/icons/quick_calendar.png', url: '/pages/timetable/timetable', gate: 'course:read' },
@@ -48,14 +48,7 @@ Page({
   },
 
   onShow() {
-    this.syncTabBar()
     this.loadRecent()
-  },
-
-  /** 自定义 tabBar:每个 tab 页须同步当前选中项(按 pagePath 键,不受过滤后数量影响)。 */
-  syncTabBar() {
-    const tb = (this as any).getTabBar && (this as any).getTabBar()
-    if (tb) tb.setData({ selected: '/pages/index/index' })
   },
 
   /** 我的近期预约:已通过且今天起;为空回退本人全部预约。 */

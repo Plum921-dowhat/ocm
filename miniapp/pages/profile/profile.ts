@@ -1,5 +1,4 @@
 import { getUser, unbind, AppUser } from '../../utils/auth'
-import { getNavInfo } from '../../utils/nav'
 import { can } from '../../utils/perms'
 import { request } from '../../utils/request'
 
@@ -13,7 +12,6 @@ function roleLabelOf(u: AppUser): string {
 
 Page({
   data: {
-    statusBarHeight: getNavInfo().statusBarHeight,
     cacheSize: '12.5 MB',
     displayName: '未登录',
     roleLabel: '',
@@ -33,7 +31,6 @@ Page({
   },
 
   onShow() {
-    this.syncTabBar()
     const u = getUser()
     if (u) {
       this.setData({
@@ -79,12 +76,6 @@ Page({
       })
     )
     this.setData({ stats })
-  },
-
-  /** 自定义 tabBar:每个 tab 页须同步当前选中项。 */
-  syncTabBar() {
-    const tb = (this as any).getTabBar && (this as any).getTabBar()
-    if (tb) tb.setData({ selected: '/pages/profile/profile' })
   },
 
   onTapAction(e: WechatMiniprogram.TouchEvent) {

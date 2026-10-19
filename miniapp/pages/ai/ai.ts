@@ -1,17 +1,8 @@
-import { getNavInfo } from '../../utils/nav'
 import { ensureAuth } from '../../utils/auth'
+import { brand } from '../../config/brand'
 import { can } from '../../utils/perms'
 import { streamChat, StreamHandle } from '../../utils/sse'
 import { request } from '../../utils/request'
-
-// 首帧渲染即需正确高度（避免 100vh 在部分机型初始计算偏差），故在模块级同步取值。
-const nav = getNavInfo()
-
-// 自定义 tabBar 不由原生扣除视口，页面根高需减去 tabBar 高度。tabBar 内容区在
-// custom-tab-bar/index.wxss 中钉死为 50px（不随屏宽 rpx 缩放），安全区由 tabBar
-// 自身的 env(safe-area-inset-bottom) 覆盖，两侧常量必须一致，否则输入栏与
-// tabBar 会重叠或留缝。
-const TAB_BAR_HEIGHT = 50 + nav.safeAreaBottom
 
 interface ToolState {
   name: string
@@ -60,8 +51,7 @@ const suggestions = [
 
 Page({
   data: {
-    statusBarHeight: nav.statusBarHeight,
-    pageHeight: nav.pageHeight - TAB_BAR_HEIGHT,
+    brand,
     canUse: false,
     messages: [] as Message[],
     inputValue: '',
@@ -77,16 +67,6 @@ Page({
     const ok = await ensureAuth()
     if (!ok) return
     this.setData({ canUse: can('ai:chat') })
-  },
-
-  onShow() {
-    this.syncTabBar()
-  },
-
-  /** 自定义 tabBar:每个 tab 页须同步当前选中项。 */
-  syncTabBar() {
-    const tb = (this as any).getTabBar && (this as any).getTabBar()
-    if (tb) tb.setData({ selected: '/pages/ai/ai' })
   },
 
   onTapSuggest(e: WechatMiniprogram.TouchEvent) {

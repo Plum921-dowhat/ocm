@@ -1,1 +1,7 @@
-<view class="page"><view class="nav"><text class="title">消息</text></view></view>
+<view class="page">
+  <app-navbar class="app-navbar" title="消息" />
+
+  <view class="body">
+    <empty-state text="暂无消息，新的通知与审批结果会出现在这里" />
+  </view>
+</view>

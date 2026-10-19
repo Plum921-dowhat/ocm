@@ -1,1 +1,15 @@
-.page{display:flex;flex-direction:column;height:100vh;background:#fff}.nav{display:flex;align-items:center;justify-content:center;height:88rpx}.title{font-size:34rpx;font-weight:700}
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #fff;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 120rpx;
+}

@@ -1,6 +1,5 @@
 <view class="page">
-  <t-navbar title="参数配置" left-arrow fixed placeholder />
-
+  <app-navbar class="app-navbar" title="参数配置" />
   <scroll-view scroll-y class="list-scroll">
     <empty-state wx:if="{{!allowed}}" text="仅系统管理员可访问此页面"></empty-state>
 
@@ -35,7 +34,7 @@
         </view>
         <view class="field">
           <text class="field-label">发件人名称</text>
-          <input class="field-input" value="{{mail.fromName}}" placeholder="OCM 通知" placeholder-class="field-placeholder" data-field="fromName" bindinput="onMailInput" />
+          <input class="field-input" value="{{mail.fromName}}" placeholder="{{brand.name}} 通知" placeholder-class="field-placeholder" data-field="fromName" bindinput="onMailInput" />
         </view>
         <view class="field">
           <text class="field-label">发件人邮箱</text>

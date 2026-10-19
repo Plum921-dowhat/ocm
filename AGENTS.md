@@ -6,7 +6,7 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 
 - **默认 WebView 渲染**。不在 app.json 设置全局 `"renderer": "skyline"`。
 - **Skyline 仅在性能关键页按页开启**:长列表、重滚动、worklet 动画等场景。开启方式:在该页 page.json 加 `"renderer": "skyline"`(`componentFramework: glass-easel` 已在 app.json 全局设置,继承即可)。
-- 开 Skyline 的页面**必须用 `scroll-view` 承载滚动内容**(Skyline 无页面级滚动),并保持 `navigationStyle: custom`。
+- 开 Skyline 的页面**必须用 `scroll-view` 承载滚动内容**(Skyline 无页面级滚动),并要求 `navigationStyle: custom` —— 本项目全站已是 custom,所以按页开 Skyline 时**不需要再补导航层**,顶部继续用 `app-navbar`。
 - 低版本微信/PC 端会自动 fallback 到 WebView,按页开启是安全的。
 - **当前所有页面均为 WebView**(mock 数据,无性能压力)。index/ai 接入真实大列表后,再按页评估开启 Skyline。
 - 选型背景见 `agents/TDesign-Skyline-兼容性调查报告.md`:TDesign 对 Skyline 支持是部分的,Cascader/Calendar 在 Skyline 下不可用,故默认 WebView 以获得完整组件库。
@@ -35,7 +35,9 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 
 - TypeScript + glass-easel。`app.js` 为纯 JS(require)以避免 app.ts/app.js 冲突;`utils/`、`config/` 为 .ts(ES 导出,编译为 CommonJS)。
 - 设计 token 在 `app.wxss`(`page` 上的 CSS 变量,如 `--color-primary: #2B5FF6`)。
-- `navigationStyle: custom`,每页手写自定义导航栏(未来可统一为 t-navbar)。
+- 顶部导航统一用 `components/app-navbar`(包一层 TDesign `t-navbar`):`app.json` 全局 `navigationStyle: "custom"`,`app-navbar` 用 `fixed="{{false}}"` 走文档流,状态栏高度、胶囊宽度、导航栏高度由 `t-navbar` 读 `getMenuButtonBoundingClientRect` 自动算,返回箭头按页面栈自动判断。页面只需在 `.page` 第一行写 `<app-navbar title="教室管理" />`,**不要**再手算 `statusBarHeight`、加 `padding-top` 或 `placeholder`。`page.json` 的 `navigationBarTitleText` 仅作文档兜底,运行时不生效;动态标题(先例 `pages/observations-form`)把文案放进页面 data 传给 `app-navbar`。
+- 底部 tabBar 用微信原生:原生 tabBar **不能按权限隐藏某一项**,无权限入口由页内空态兜底(先例 `pages/ai`)。
+- **CI 门禁**:`.github/workflows/miniapp.yml` 在 `miniapp/**` 或 workflow 自身变更时跑两步——`miniapp/scripts/check-navbar.py`(每页必须有 `<app-navbar>`,标题须与 `page.json` 的 `navigationBarTitleText` 一致,登录页允许空标题)和 `tsc --noEmit`(TypeScript 按版本号内联锁定,未进 devDependencies)。脚本按自身位置定位小程序目录,从任意 cwd 都能跑;本地改完页面先跑一遍,别等 CI。`miniapp/scripts/` 已在 `project.config.json` 的 `packOptions.ignore` 中排除,不会进入代码包。
 
 ## 后端(Go)
 
@@ -51,6 +53,8 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 - **后端模块注册表**：`backend/internal/modules/`——下游在**该目录新增文件**（package modules）以 `init()` 调 `modules.Register(Module{Name, Migrate, Mount})`，`main.go` 在内置模块接线完成后先统一跑 Migrate 再统一 Mount（按 Name 排序确定性执行）。文件级组装即可把下游模块编进二进制，**零覆盖 main.go**；下游权限继续走 `authz.RegisterPermissions`（package init 先于 main，orphan 检查可见）。
 - **observation 文档后端（Renderer）注册**：注册代码必须位于**会被编入二进制的包**——惯用位置是 `backend/internal/modules/` 下新增的下游文件（package modules，可不调 `Register`），其 `init()` 调 `observation.RegisterRendererFactory(func(db) (Renderer, error))`（`backend/internal/observation/renderer_registry.go`），工厂内 `schedule.NewStore(db)` + 下游 `renderer.New(store)` 构造实现；**不得**把注册文件放进 `internal/observation/` 包内——实现方为拿到 `Renderer` 契约与 `*observation.Observation` 必然 import observation，同包引入即成 import 环。`main.go` 接线听课评课时经 `observation.ResolveRenderer` 构建注入；未注册即开源默认（CRUD/提交可用，模板/导出端点报 `ErrRendererMissing`）。时序：ResolveRenderer 在内置迁移之后、**modules 迁移循环之前**执行——工厂需要自己的表就自行迁移（`CREATE TABLE IF NOT EXISTS` 惯例）。
 - **Web 文件注入**：`src/config/appRoutes.override.tsx`（导出 `overrideRoutes: AppRoute[]`）与 `src/config/navigation.override.ts`（导出 `overrideEntries: NavEntry[]`）经 `import.meta.glob` 构建期并入，**新增文件即加页面/菜单**；整文件覆盖这两个数据文件的老方式继续兼容。
+- **小程序品牌注入**：`miniapp/config/brand.override.ts` 导出 `brandOverride: Partial<BrandConfig>`，`config/brand.ts` 合并成 `brand`（默认 OCM）；页面在 `data` 里挂 `brand`，WXML 用 `{{brand.name}}` / `{{brand.titleCloud}}` / `{{brand.systemName}}` / `{{brand.aiName}}`，logo 一律走 `{{brand.logoImage}}`（**图片是唯一方案，无文字 logo 兜底**；默认 `assets/brand/logo.png` 与 web `src/assets/logo.png` 同图，保证上游回归会覆盖图片路径）。小程序没有打包器，做不到 web 的 `import.meta.glob`（缺失模块编译期即报错），因此覆盖文件**始终存在**、上游保持空对象，下游只改这一个文件。`app.json` / `project.config.json` 是编译器直读的 JSON，导入不了 `brand`——默认标题、tabBar 配色、appid 仍需在各文件里改；品牌色（含 tabbar 位图）不在注入范围内。
+- **小程序类型门禁**：`miniapp/tsconfig.json` + `cd miniapp && npx --yes --package typescript@5.9.2 tsc --noEmit`。`wx.request` 的类型联合不含 `PATCH`（后端有 `PATCH /api/users/{id}/password`），`utils/request.ts` 在调用处收窄，新增方法时不要退回整体 `any`。
 - **物联网**：后端模块 `backend/internal/iot`（数据面 `internal/iot/mqtt`，`IOT_*` env 未配置即惰性、命令下发 503）；契约规范 `iot/spec/spec.md`（topic 无版本前缀、载荷带 `"v":1`、命令必须带 `expires_at`）；设备侧 SDK/模拟器在顶层第二个 Go module `iot/`（module `github.com/zyang4418/ocm/iot`，backend 刻意不 import 它，契约一致性靠 `go test -tags=integration` e2e）；部署 overlay `docker-compose.iot.yml`。权限 `iot:read/manage/control`，`iot:control` 单独门控物理命令。
 
 ## AI 编程工具参考（agents/）

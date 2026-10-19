@@ -1,12 +1,6 @@
-<view class="page" style="padding-top: {{statusBarHeight}}px; height: {{pageHeight}}px">
+<view class="page">
 
-  <!-- 自定义导航栏 -->
-  <view class="nav-bar">
-    <view class="nav-left"></view>
-    <text class="nav-title">AI助手</text>
-    <view class="nav-right"></view>
-  </view>
-
+  <app-navbar class="app-navbar" title="AI助手" />
   <scroll-view type="custom" scroll-y class="scroll-content" scroll-into-view="{{scrollInto}}" scroll-with-animation>
     <!-- 无权限 -->
     <empty-state wx:if="{{!canUse}}" text="没有使用权限，如需使用请联系管理员授权"></empty-state>
@@ -17,7 +11,7 @@
         <view class="hero-section">
           <view class="hero-card">
             <image class="hero-icon" src="/assets/icons/ai_assistant.png" mode="aspectFit" />
-            <text class="hero-title">OCM AI 助手</text>
+            <text class="hero-title">{{brand.aiName}}</text>
             <text class="hero-subtitle">按您的权限查询教室、空闲时段与课表；预约需在预览中确认后才会提交</text>
           </view>
         </view>

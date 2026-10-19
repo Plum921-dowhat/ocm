@@ -1,9 +1,9 @@
 import { bindAccount, silentLogin, getToken } from '../../utils/auth'
-import { getNavInfo } from '../../utils/nav'
+import { brand } from '../../config/brand'
 
 Page({
   data: {
-    statusBarHeight: getNavInfo().statusBarHeight,
+    brand,
     username: '',
     password: '',
     showPassword: false,

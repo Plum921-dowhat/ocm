@@ -1,6 +1,6 @@
 {
+  "navigationBarTitleText": "课程管理",
   "usingComponents": {
-    "t-navbar": "tdesign-miniprogram/navbar/navbar",
     "t-segmented": "tdesign-miniprogram/segmented/segmented",
     "form-dialog": "/components/form-dialog/form-dialog",
     "empty-state": "/components/empty-state/empty-state",

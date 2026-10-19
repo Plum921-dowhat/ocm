@@ -1,6 +1,6 @@
 {
+  "navigationBarTitleText": "新建评课",
   "usingComponents": {
-    "t-navbar": "tdesign-miniprogram/navbar/navbar",
     "t-button": "tdesign-miniprogram/button/button"
   }
 }

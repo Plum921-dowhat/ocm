@@ -1,0 +1,19 @@
+<!-- 全站统一顶部导航：包一层 TDesign Navbar，集中处理四件事
+     1. fixed={{false}} —— 走文档流，自身占位，页面内容不需要再算状态栏高度或加 placeholder；
+     2. 返回按钮按页面栈自动判断（tab 页栈深为 1，不显示；navigateTo 打开的页显示）；
+     3. 返回行为自己接管：栈深 > 1 用 navigateBack，栈深为 1（扫码/分享直达）回首页；
+     4. 状态栏高度、胶囊宽度、导航栏高度由 t-navbar 读 getMenuButtonBoundingClientRect 自动计算。
+     页面只需写 <app-navbar title="教室管理" />。 -->
+<t-navbar title="{{title}}" fixed="{{false}}">
+  <view
+    wx:if="{{showBack}}"
+    slot="left"
+    class="app-navbar__back"
+    hover-class="app-navbar__back--active"
+    aria-role="button"
+    aria-label="返回"
+    bindtap="onBack"
+  >
+    <t-icon name="chevron-left" size="48rpx" color="var(--color-text)" />
+  </view>
+</t-navbar>

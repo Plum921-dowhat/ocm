@@ -1,6 +1,5 @@
 <view class="page">
-  <t-navbar title="{{mode === 'edit' ? '编辑评课' : '新建评课'}}" left-arrow fixed placeholder />
-
+  <app-navbar class="app-navbar" title="{{navTitle}}" />
   <scroll-view scroll-y class="form-scroll">
     <view wx:if="{{error}}" class="banner">
       <text class="banner-text">{{error}}</text>

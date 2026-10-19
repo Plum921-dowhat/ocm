@@ -1,12 +1,6 @@
-<view class="page" style="padding-top: {{statusBarHeight}}px">
+<view class="page">
 
-  <!-- 自定义导航栏 -->
-  <view class="nav-bar">
-    <view class="nav-left"></view>
-    <text class="nav-title">我的</text>
-    <view class="nav-right"></view>
-  </view>
-
+  <app-navbar class="app-navbar" title="我的" />
   <scroll-view type="custom" scroll-y class="scroll-content">
 
     <!-- 用户卡片 -->

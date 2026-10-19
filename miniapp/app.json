@@ -27,10 +27,15 @@
   ],
   "window": {
     "navigationBarTitleText": "OCM",
-    "navigationStyle": "custom"
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTextStyle": "black",
+    "navigationStyle": "custom",
+    "backgroundColor": "#F5F7FA"
+  },
+  "usingComponents": {
+    "app-navbar": "/components/app-navbar/app-navbar"
   },
   "tabBar": {
-    "custom": true,
     "color": "#8F959E",
     "selectedColor": "#2B5FF6",
     "backgroundColor": "#FFFFFF",
