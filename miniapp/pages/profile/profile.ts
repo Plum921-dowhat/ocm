@@ -33,7 +33,6 @@ Page({
   },
 
   onShow() {
-    this.syncTabBar()
     const u = getUser()
     if (u) {
       this.setData({
@@ -79,12 +78,6 @@ Page({
       })
     )
     this.setData({ stats })
-  },
-
-  /** 自定义 tabBar:每个 tab 页须同步当前选中项。 */
-  syncTabBar() {
-    const tb = (this as any).getTabBar && (this as any).getTabBar()
-    if (tb) tb.setData({ selected: '/pages/profile/profile' })
   },
 
   onTapAction(e: WechatMiniprogram.TouchEvent) {

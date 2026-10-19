@@ -2,8 +2,8 @@
 .page {
   display: flex;
   flex-direction: column;
-  /* 自定义 tabBar:根高已在 TS 侧扣除 tabBar 高度,这里按 border-box 与
-     padding-top 一起计,否则底部输入栏会被 tabBar 遮住 */
+  /* 原生 tabBar:100vh 已扣除 tabBar(含安全区),根高直接用满即可 */
+  height: 100vh;
   box-sizing: border-box;
   background: var(--color-bg);
 }

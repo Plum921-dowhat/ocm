@@ -303,7 +303,9 @@
 
 /* ── 今日课程 ── */
 .schedule-section {
-  padding: 0 var(--space-md) 48rpx;
+  /* 底部与其它 section 对齐(16px);原先的 48rpx 是为了躲开自定义 tabBar,
+     换成原生 tabBar 后不再需要 */
+  padding: 0 var(--space-md) var(--space-md);
   background: var(--color-bg);
 }
 
@@ -420,7 +422,6 @@
   flex: 1;
   /* flex 子项默认 min-height:auto,内容高会撑破固定高容器,须显式清零 */
   min-height: 0;
-  /* 自定义 tabBar 不再占据视口,留出 tabBar(100rpx)+安全区高度,避免末行被遮挡 */
-  padding-bottom: calc(100rpx + env(safe-area-inset-bottom));
+  /* 底部留白由各 section 自己的 padding 提供,这里不再叠加 */
   box-sizing: border-box;
 }
