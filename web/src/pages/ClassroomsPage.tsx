@@ -1,31 +1,16 @@
 import { useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
   Select,
-  SelectItem,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
   Tag,
-  TextInput,
-  type DataTableHeader,
-  type TagProps,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -33,6 +18,7 @@ import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import { formatDate } from '../i18n/formatters'
 import type { Classroom, ClassroomInput } from '../types/api'
 
@@ -51,7 +37,7 @@ const TYPE_KEYS = [
 ] as const
 const STATUS_KEYS = ['available', 'maintenance', 'disabled'] as const
 
-const statusKind: Record<string, TagProps<'div'>['type']> = {
+const STATUS_COLOR: Record<string, string> = {
   available: 'green',
   maintenance: 'blue',
   disabled: 'red',
@@ -86,26 +72,11 @@ export default function ClassroomsPage() {
   const navigate = useNavigate()
   const canManage = can('classroom:manage')
 
-  const headers: DataTableHeader[] = [
-    { key: 'id', header: t('field.id') },
-    { key: 'name', header: t('field.name') },
-    { key: 'building', header: t('field.building') },
-    { key: 'capacity', header: t('field.capacity') },
-    { key: 'type', header: t('field.type') },
-    { key: 'floor', header: t('field.floor') },
-    { key: 'campus', header: t('field.campus') },
-    { key: 'status', header: t('field.status') },
-    { key: 'createdAt', header: t('field.createdAt') },
-  ]
-
   const list = usePagedList<Classroom>({ path: '/api/classrooms', token })
   const { loading } = list
   // Export errors are separate from the list fetch (the hook owns its error).
   const [exportError, setExportError] = useState('')
   const error = list.error || exportError
-
-  // Carbon DataTable keys rows by a string id.
-  const tableRows = list.items.map((c) => ({ ...c, id: String(c.id) }))
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState<ClassroomForm>(emptyForm)
@@ -221,345 +192,251 @@ export default function ClassroomsPage() {
     }
   }
 
-  const colSpan = headers.length + (canManage ? 1 : 0)
+  const columns: TableColumnsType<Classroom> = [
+    { title: t('field.id'), dataIndex: 'id', width: 72 },
+    { title: t('field.name'), dataIndex: 'name', width: 160 },
+    { title: t('field.building'), dataIndex: 'building', width: 140 },
+    { title: t('field.capacity'), dataIndex: 'capacity', width: 96 },
+    {
+      title: t('field.type'),
+      dataIndex: 'type',
+      width: 130,
+      render: (value: string) => t('type.' + value, { defaultValue: value }),
+    },
+    { title: t('field.floor'), dataIndex: 'floor', width: 90 },
+    { title: t('field.campus'), dataIndex: 'campus', width: 120 },
+    {
+      title: t('field.status'),
+      dataIndex: 'status',
+      width: 110,
+      render: (value: string) => (
+        <Tag color={STATUS_COLOR[value] ?? 'default'}>
+          {t('status.' + value, { ns: 'common', defaultValue: value })}
+        </Tag>
+      ),
+    },
+    {
+      title: t('field.createdAt'),
+      dataIndex: 'createdAt',
+      width: 170,
+      render: (value: string) => formatDate(value),
+    },
+  ]
+
+  if (canManage) {
+    columns.push({
+      title: t('field.actions'),
+      key: 'actions',
+      width: 108,
+      fixed: 'right',
+      render: (_, c) => (
+        <div className="classrooms-page__actions">
+          <Button
+            type="text"
+            size="small"
+            aria-label={t('action.edit', { ns: 'common' })}
+            icon={<EditOutlined />}
+            onClick={() => openEdit(c)}
+          />
+          <Button
+            type="text"
+            size="small"
+            danger
+            aria-label={t('action.delete', { ns: 'common' })}
+            icon={<DeleteOutlined />}
+            onClick={() => openDelete(c)}
+          />
+        </div>
+      ),
+    })
+  }
+
+  const formFields = (
+    form: ClassroomForm,
+    setForm: (next: ClassroomForm) => void,
+    idPrefix: string,
+  ) => (
+    <>
+      <Field label={t('field.name')} htmlFor={`${idPrefix}-name`}>
+        <Input
+          id={`${idPrefix}-name`}
+          placeholder={t('placeholder.name')}
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
+      </Field>
+      <Field label={t('field.building')} htmlFor={`${idPrefix}-building`}>
+        <Input
+          id={`${idPrefix}-building`}
+          placeholder={t('placeholder.building')}
+          value={form.building}
+          onChange={(e) => setForm({ ...form, building: e.target.value })}
+        />
+      </Field>
+      <Field label={t('field.capacity')} htmlFor={`${idPrefix}-capacity`}>
+        <Input
+          id={`${idPrefix}-capacity`}
+          type="number"
+          min={1}
+          value={form.capacity}
+          onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+        />
+      </Field>
+      <Field label={t('field.type')} htmlFor={`${idPrefix}-type`}>
+        <Select
+          id={`${idPrefix}-type`}
+          value={form.type}
+          onChange={(type: string) => setForm({ ...form, type })}
+          options={TYPE_KEYS.map((k) => ({ value: k, label: t('type.' + k) }))}
+        />
+      </Field>
+      <Field label={t('field.floor')} htmlFor={`${idPrefix}-floor`}>
+        <Input
+          id={`${idPrefix}-floor`}
+          placeholder={t('placeholder.floor')}
+          value={form.floor}
+          onChange={(e) => setForm({ ...form, floor: e.target.value })}
+        />
+      </Field>
+      <Field label={t('field.campus')} htmlFor={`${idPrefix}-campus`}>
+        <Input
+          id={`${idPrefix}-campus`}
+          placeholder={t('placeholder.campus')}
+          value={form.campus}
+          onChange={(e) => setForm({ ...form, campus: e.target.value })}
+        />
+      </Field>
+      <Field label={t('field.status')} htmlFor={`${idPrefix}-status`}>
+        <Select
+          id={`${idPrefix}-status`}
+          value={form.status}
+          onChange={(status: string) => setForm({ ...form, status })}
+          options={STATUS_KEYS.map((k) => ({ value: k, label: t('status.' + k, { ns: 'common' }) }))}
+        />
+      </Field>
+      <Field label={t('field.description')} htmlFor={`${idPrefix}-description`}>
+        <Input
+          id={`${idPrefix}-description`}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
+      </Field>
+    </>
+  )
 
   return (
-    <Grid fullWidth className="classrooms-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="classrooms-page__heading">{t('title')}</h1>
-        <p className="classrooms-page__subtitle">{t('subtitle')}</p>
-      </Column>
+    <div className="classrooms-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="classrooms-page__heading">{t('title')}</h1>
+      <p className="classrooms-page__subtitle">{t('subtitle')}</p>
 
-      <Column sm={4} md={8} lg={16}>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="classrooms-page__notice"
-          />
-        )}
+      {error && (
+        <Alert type="error" showIcon title={t('error.load')} description={error} className="classrooms-page__notice" />
+      )}
 
-        <DataTable rows={tableRows} headers={headers}>
-          {({
-            rows,
-            headers: tableHeaders,
-            getTableProps,
-            getHeaderProps,
-            getRowProps,
-            getToolbarProps,
-          }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('searchPlaceholder')} />
-                  <ExportButton
-                    path="/api/classrooms/export"
-                    fallbackName="classrooms.xlsx"
-                    onError={setExportError}
-                  />
-                  {canManage && (
-                    <Button renderIcon={Add} size="sm" onClick={() => setCreateOpen(true)}>
-                      {t('addButton')}
-                    </Button>
-                  )}
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    {canManage && <TableHeader>{t('field.actions')}</TableHeader>}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>
-                        {list.q ? t('empty.search') : t('empty.none')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const c = list.items.find((x) => String(x.id) === String(row.id))
-                      if (!c) return null
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            const value = cell.value as string
-                            if (cell.info.header === 'type') {
-                              return (
-                                <TableCell key={cell.id}>
-                                  {t('type.' + value, { defaultValue: value })}
-                                </TableCell>
-                              )
-                            }
-                            if (cell.info.header === 'status') {
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={statusKind[value] ?? 'gray'} size="sm">
-                                    {t('status.' + value, { ns: 'common', defaultValue: value })}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            if (cell.info.header === 'createdAt') {
-                              return <TableCell key={cell.id}>{formatDate(cell.value as string)}</TableCell>
-                            }
-                            return <TableCell key={cell.id}>{value}</TableCell>
-                          })}
-                          {canManage && (
-                            <TableCell>
-                              <div className="classrooms-page__actions">
-                                <Button
-                                  kind="ghost"
-                                  size="sm"
-                                  hasIconOnly
-                                  renderIcon={Edit}
-                                  iconDescription={t('action.edit', { ns: 'common' })}
-                                  onClick={() => openEdit(c)}
-                                />
-                                <Button
-                                  kind="ghost"
-                                  size="sm"
-                                  hasIconOnly
-                                  renderIcon={TrashCan}
-                                  iconDescription={t('action.delete', { ns: 'common' })}
-                                  onClick={() => openDelete(c)}
-                                />
-                              </div>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
         />
-      </Column>
+        <ExportButton path="/api/classrooms/export" fallbackName="classrooms.xlsx" onError={setExportError} />
+        {canManage && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            {t('addButton')}
+          </Button>
+        )}
+      </div>
+
+      <Table<Classroom>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1200 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('modal.create')}
-        primaryButtonText={t('modal.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
+        title={t('modal.create')}
+        okText={t('modal.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        destroyOnHidden
       >
         <div className="classrooms-page__form">
-          <TextInput
-            id="create-name"
-            labelText={t('field.name')}
-            placeholder={t('placeholder.name')}
-            value={createForm.name}
-            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-          />
-          <TextInput
-            id="create-building"
-            labelText={t('field.building')}
-            placeholder={t('placeholder.building')}
-            value={createForm.building}
-            onChange={(e) => setCreateForm({ ...createForm, building: e.target.value })}
-          />
-          <TextInput
-            id="create-capacity"
-            type="number"
-            labelText={t('field.capacity')}
-            min="1"
-            value={createForm.capacity}
-            onChange={(e) => setCreateForm({ ...createForm, capacity: e.target.value })}
-          />
-          <Select
-            id="create-type"
-            labelText={t('field.type')}
-            value={createForm.type}
-            onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
-          >
-            {TYPE_KEYS.map((k) => (
-              <SelectItem key={k} value={k} text={t('type.' + k)} />
-            ))}
-          </Select>
-          <TextInput
-            id="create-floor"
-            labelText={t('field.floor')}
-            placeholder={t('placeholder.floor')}
-            value={createForm.floor}
-            onChange={(e) => setCreateForm({ ...createForm, floor: e.target.value })}
-          />
-          <TextInput
-            id="create-campus"
-            labelText={t('field.campus')}
-            placeholder={t('placeholder.campus')}
-            value={createForm.campus}
-            onChange={(e) => setCreateForm({ ...createForm, campus: e.target.value })}
-          />
-          <Select
-            id="create-status"
-            labelText={t('field.status')}
-            value={createForm.status}
-            onChange={(e) => setCreateForm({ ...createForm, status: e.target.value })}
-          >
-            {STATUS_KEYS.map((k) => (
-              <SelectItem key={k} value={k} text={t('status.' + k, { ns: 'common' })} />
-            ))}
-          </Select>
-          <TextInput
-            id="create-description"
-            labelText={t('field.description')}
-            value={createForm.description}
-            onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-          />
-          {createError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.create')}
-              subtitle={createError}
-              lowContrast
-              hideCloseButton
-            />
-          )}
+          {formFields(createForm, setCreateForm, 'create')}
+          {createError && <Alert type="error" showIcon title={t('error.create')} description={createError} />}
         </div>
       </Modal>
 
       {/* Edit */}
       <Modal
         open={Boolean(editTarget)}
-        modalHeading={t('modal.edit', { name: editTarget?.name ?? '' })}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditTarget(null)}
-        onRequestSubmit={handleEdit}
-        primaryButtonDisabled={editing}
+        title={t('modal.edit', { name: editTarget?.name ?? '' })}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditTarget(null)}
+        onOk={handleEdit}
+        confirmLoading={editing}
+        destroyOnHidden
       >
         <div className="classrooms-page__form">
-          <TextInput
-            id="edit-name"
-            labelText={t('field.name')}
-            value={editForm.name}
-            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-          />
-          <TextInput
-            id="edit-building"
-            labelText={t('field.building')}
-            value={editForm.building}
-            onChange={(e) => setEditForm({ ...editForm, building: e.target.value })}
-          />
-          <TextInput
-            id="edit-capacity"
-            type="number"
-            labelText={t('field.capacity')}
-            min="1"
-            value={editForm.capacity}
-            onChange={(e) => setEditForm({ ...editForm, capacity: e.target.value })}
-          />
-          <Select
-            id="edit-type"
-            labelText={t('field.type')}
-            value={editForm.type}
-            onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
-          >
-            {TYPE_KEYS.map((k) => (
-              <SelectItem key={k} value={k} text={t('type.' + k)} />
-            ))}
-          </Select>
-          <TextInput
-            id="edit-floor"
-            labelText={t('field.floor')}
-            value={editForm.floor}
-            onChange={(e) => setEditForm({ ...editForm, floor: e.target.value })}
-          />
-          <TextInput
-            id="edit-campus"
-            labelText={t('field.campus')}
-            value={editForm.campus}
-            onChange={(e) => setEditForm({ ...editForm, campus: e.target.value })}
-          />
-          <Select
-            id="edit-status"
-            labelText={t('field.status')}
-            value={editForm.status}
-            onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-          >
-            {STATUS_KEYS.map((k) => (
-              <SelectItem key={k} value={k} text={t('status.' + k, { ns: 'common' })} />
-            ))}
-          </Select>
-          <TextInput
-            id="edit-description"
-            labelText={t('field.description')}
-            value={editForm.description}
-            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-          />
-          {editError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.save')}
-              subtitle={editError}
-              lowContrast
-              hideCloseButton
-            />
-          )}
+          {formFields(editForm, setEditForm, 'edit')}
+          {editError && <Alert type="error" showIcon title={t('error.save')} description={editError} />}
         </div>
       </Modal>
 
       {/* Delete */}
       <Modal
-        danger
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
-        <p className="classrooms-page__confirm-text">
-          {t('deleteConfirm', { name: deleteTarget?.name })}
-        </p>
-        {deleteError && (
-          <InlineNotification
-            kind="error"
-            title={t('error.delete')}
-            subtitle={deleteError}
-            lowContrast
-            hideCloseButton
-          />
-        )}
+        <p className="classrooms-page__confirm-text">{t('deleteConfirm', { name: deleteTarget?.name })}</p>
+        {deleteError && <Alert type="error" showIcon title={t('error.delete')} description={deleteError} />}
       </Modal>
-    </Grid>
+    </div>
   )
 }

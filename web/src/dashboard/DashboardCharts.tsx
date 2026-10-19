@@ -46,7 +46,7 @@ export default function DashboardCharts({ periods, load, loadAll }: DashboardCha
                 xField="period"
                 yField="count"
                 height={240}
-                theme={chartTheme}
+                theme={{ type: chartTheme }}
                 legend={false}
                 style={{ fill: SERIES_COLOR }}
               />
@@ -63,7 +63,7 @@ export default function DashboardCharts({ periods, load, loadAll }: DashboardCha
                 xField="date"
                 yField="count"
                 height={240}
-                theme={chartTheme}
+                theme={{ type: chartTheme }}
                 legend={false}
                 style={{ stroke: SERIES_COLOR }}
                 point={{ size: 3, shape: 'circle' }}

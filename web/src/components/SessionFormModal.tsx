@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Button, InlineNotification, Modal, Select, SelectItem, TextInput } from '@carbon/react'
-import { Calendar } from '@carbon/icons-react'
+import { Alert, Button, Input, Modal, Select, DatePicker } from 'antd'
+import { CalendarOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
+import Field from '../ui/Field'
 import TimetablePickerModal, { type TimetablePick } from './TimetablePickerModal'
 import type { Classroom, OfferingView, SessionInput, SessionView } from '../types/api'
 
@@ -57,11 +59,11 @@ export default function SessionFormModal({
   const [saving, setSaving] = useState(false)
   // Timetable picker layered on top of this dialog: picking a free cell
   // backfills classroom/date/periods here for review before submitting.
-  // While it is open this form's Modal is closed: two stacked Carbon modals
-  // keep two focus traps alive, and the lower one yanks focus back on every
-  // focus move into the picker (a native <select> dropdown then closes
-  // instantly). Form state lives here, not in the Modal children, so closing
-  // the Modal loses nothing.
+  // While it is open this form's Modal is closed: two stacked modals keep two
+  // focus traps alive, and the lower one yanks focus back on every focus move
+  // into the picker (a native <select> dropdown then closes instantly). Form
+  // state lives here, not in the Modal children, so closing the Modal loses
+  // nothing.
   const [pickerOpen, setPickerOpen] = useState(false)
 
   // (Re)initialize from the edit target / default offering each time the
@@ -144,81 +146,79 @@ export default function SessionFormModal({
       {/* open && !pickerOpen: see the pickerOpen comment above. */}
       <Modal
         open={open && !pickerOpen}
-        modalHeading={target ? t('sessionModal.edit', { date: target.date }) : t('sessionModal.create')}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={onClose}
-        onRequestSubmit={submit}
-        primaryButtonDisabled={saving}
+        title={target ? t('sessionModal.edit', { date: target.date }) : t('sessionModal.create')}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={onClose}
+        onOk={submit}
+        confirmLoading={saving}
+        destroyOnHidden
       >
         <div className="courses-page__form">
-          <Select
-            id="session-form-offering"
-            labelText={t('sessionForm.offering')}
-            value={form.offeringId}
-            onChange={(e) => setForm({ ...form, offeringId: e.target.value })}
-          >
-            <SelectItem value="" text={t('sessionForm.selectOffering')} />
-            {offerings.map((o) => (
-              <SelectItem
-                key={o.id}
-                value={String(o.id)}
-                text={[o.catalogName, o.teachingClassName, o.teacher].filter(Boolean).join(' / ')}
-              />
-            ))}
-          </Select>
-          <Select
-            id="session-form-classroom"
-            labelText={t('sessionForm.classroom')}
-            value={form.classroomId}
-            onChange={(e) => setForm({ ...form, classroomId: e.target.value })}
-          >
-            <SelectItem value="" text={t('sessionForm.selectClassroom')} />
-            {classrooms.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)} text={c.name} />
-            ))}
-          </Select>
+          <Field label={t('sessionForm.offering')} htmlFor="session-form-offering">
+            <Select
+              id="session-form-offering"
+              placeholder={t('sessionForm.selectOffering')}
+              value={form.offeringId || undefined}
+              onChange={(value: string) => setForm({ ...form, offeringId: value })}
+              options={offerings.map((o) => ({
+                value: String(o.id),
+                label: [o.catalogName, o.teachingClassName, o.teacher].filter(Boolean).join(' / '),
+              }))}
+            />
+          </Field>
+          <Field label={t('sessionForm.classroom')} htmlFor="session-form-classroom">
+            <Select
+              id="session-form-classroom"
+              placeholder={t('sessionForm.selectClassroom')}
+              value={form.classroomId || undefined}
+              onChange={(value: string) => setForm({ ...form, classroomId: value })}
+              options={classrooms.map((c) => ({ value: String(c.id), label: c.name }))}
+            />
+          </Field>
           <Button
-            kind="secondary"
-            size="sm"
-            renderIcon={Calendar}
+            size="small"
+            icon={<CalendarOutlined />}
             className="session-form__pick"
             onClick={() => setPickerOpen(true)}
             disabled={classrooms.length === 0}
           >
             {t('sessionForm.pickFromTimetable')}
           </Button>
-          <TextInput
-            id="session-form-date"
-            type="date"
-            labelText={t('sessionForm.date')}
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-          />
-          <TextInput
-            id="session-form-period-start"
-            type="number"
-            min="1"
-            labelText={t('sessionForm.periodStart')}
-            value={form.periodStart}
-            onChange={(e) => setForm({ ...form, periodStart: e.target.value })}
-          />
-          <TextInput
-            id="session-form-period-end"
-            type="number"
-            min="1"
-            labelText={t('sessionForm.periodEnd')}
-            helperText={t('sessionForm.periodHint')}
-            value={form.periodEnd}
-            onChange={(e) => setForm({ ...form, periodEnd: e.target.value })}
-          />
-          <TextInput
-            id="session-form-note"
-            labelText={t('sessionForm.note')}
-            value={form.note}
-            onChange={(e) => setForm({ ...form, note: e.target.value })}
-          />
-          {error && <InlineNotification kind="error" title={t('error.save')} subtitle={error} lowContrast hideCloseButton />}
+          <Field label={t('sessionForm.date')} htmlFor="session-form-date">
+            <DatePicker
+              id="session-form-date"
+              allowClear={false}
+              value={form.date ? dayjs(form.date) : null}
+              onChange={(d) => setForm({ ...form, date: d ? d.format('YYYY-MM-DD') : '' })}
+            />
+          </Field>
+          <Field label={t('sessionForm.periodStart')} htmlFor="session-form-period-start">
+            <Input
+              id="session-form-period-start"
+              type="number"
+              min={1}
+              value={form.periodStart}
+              onChange={(e) => setForm({ ...form, periodStart: e.target.value })}
+            />
+          </Field>
+          <Field label={t('sessionForm.periodEnd')} htmlFor="session-form-period-end" hint={t('sessionForm.periodHint')}>
+            <Input
+              id="session-form-period-end"
+              type="number"
+              min={1}
+              value={form.periodEnd}
+              onChange={(e) => setForm({ ...form, periodEnd: e.target.value })}
+            />
+          </Field>
+          <Field label={t('sessionForm.note')} htmlFor="session-form-note">
+            <Input
+              id="session-form-note"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+            />
+          </Field>
+          {error && <Alert type="error" showIcon title={t('error.save')} description={error} />}
         </div>
       </Modal>
       <TimetablePickerModal

@@ -1,37 +1,16 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
   Select,
-  SelectItem,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableExpandHeader,
-  TableExpandedRow,
-  TableExpandRow,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
   Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-  TextInput,
-  type DataTableHeader,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -40,7 +19,8 @@ import ExportButton from '../components/ExportButton'
 import ListPagination from '../components/ListPagination'
 import SessionsMiniTable, { type SessionsCacheEntry } from '../components/SessionsMiniTable'
 import SessionsPanel from '../components/SessionsPanel'
-import usePagedList, { type PagedList } from '../hooks/usePagedList'
+import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import type {
   CatalogCourse,
   CatalogInput,
@@ -75,22 +55,6 @@ export default function CourseManagementPage() {
   const navigate = useNavigate()
   const canManage = can('course:manage')
 
-  const offeringHeaders: DataTableHeader[] = [
-    { key: 'id', header: t('offeringField.id') },
-    { key: 'catalogName', header: t('offeringField.catalogName') },
-    { key: 'catalogCode', header: t('offeringField.catalogCode') },
-    { key: 'teachingClassName', header: t('offeringField.teachingClassName') },
-    { key: 'classNames', header: t('offeringField.classNames') },
-    { key: 'teacher', header: t('offeringField.teacher') },
-    { key: 'semester', header: t('offeringField.semester') },
-  ]
-  const catalogHeaders: DataTableHeader[] = [
-    { key: 'id', header: t('catalogField.id') },
-    { key: 'name', header: t('catalogField.name') },
-    { key: 'code', header: t('catalogField.code') },
-    { key: 'description', header: t('catalogField.description') },
-  ]
-
   const offerings = usePagedList<OfferingView>({ path: '/api/offerings', token })
   const catalogList = usePagedList<CatalogCourse>({ path: '/api/courses', token })
   // Dropdown options for the offering modal need (near-)full lists; pull the
@@ -106,7 +70,7 @@ export default function CourseManagementPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   // Controlled tabs so an expanded row's "view all" link can jump to the
   // sessions tab with the offering filter pre-applied.
-  const [tabIndex, setTabIndex] = useState(0)
+  const [tabKey, setTabKey] = useState('offerings')
   const [pendingSessionsFilter, setPendingSessionsFilter] = useState<string | null>(null)
   // Export errors are separate from the list fetches (the hooks own theirs).
   const [exportError, setExportError] = useState('')
@@ -361,373 +325,390 @@ export default function CourseManagementPage() {
   // "View all" from an expanded row: switch to the sessions tab pre-filtered.
   const viewAllSessions = (offeringId: number) => {
     setPendingSessionsFilter(String(offeringId))
-    setTabIndex(2)
+    setTabKey('sessions')
   }
-
-  const renderActions = (kind: DeleteTarget['kind'], row: OfferingView | CatalogCourse) =>
-    canManage && (
-      <TableCell>
-        <div className="courses-page__actions">
-          <Button
-            kind="ghost"
-            size="sm"
-            hasIconOnly
-            renderIcon={Edit}
-            iconDescription={t('action.edit', { ns: 'common' })}
-            onClick={() => (kind === 'offering' ? openEditOffering(row as OfferingView) : openEditCatalog(row as CatalogCourse))}
-          />
-          <Button
-            kind="ghost"
-            size="sm"
-            hasIconOnly
-            renderIcon={TrashCan}
-            iconDescription={t('action.delete', { ns: 'common' })}
-            onClick={() => setDelTarget(kind === 'offering' ? { kind, row: row as OfferingView } : { kind, row: row as CatalogCourse })}
-          />
-        </div>
-      </TableCell>
-    )
 
   // classNames column joins admin-class names with a locale-appropriate
   // separator (zh: "、", en: ", ") via Intl.ListFormat narrow style.
   const listFmt = new Intl.ListFormat(i18n.language, { style: 'narrow' })
 
-  const renderTable = (list: PagedList<OfferingView> | PagedList<CatalogCourse>, headers: DataTableHeader[], kind: 'offering' | 'catalog') => (
-    <DataTable rows={list.items.map((item) => ({ ...item, id: String(item.id) }))} headers={headers}>
-      {({ rows, headers: th, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-        <TableContainer
-          title={kind === 'offering' ? t('table.offering.title') : t('table.catalog.title')}
-          description={t(`table.${kind}.description`, { count: list.total })}
-        >
-          <TableToolbar {...getToolbarProps()}>
-            <TableToolbarContent>
-              <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('searchPlaceholder')} />
-              <ExportButton
-                path={kind === 'offering' ? '/api/offerings/export' : '/api/courses/export'}
-                fallbackName={kind === 'offering' ? 'offerings.xlsx' : 'catalog.xlsx'}
-                onError={setExportError}
-              />
-              {canManage && (
-                <Button
-                  renderIcon={Add}
-                  size="sm"
-                  onClick={() => {
-                    if (kind === 'offering') {
-                      setOffForm(emptyOffering)
-                      setOffEditTarget(null)
-                      setOffError('')
-                      setOffCreateOpen(true)
-                    } else {
-                      setCatForm(emptyCatalog)
-                      setCatEditTarget(null)
-                      setCatError('')
-                      setCatCreateOpen(true)
-                    }
-                  }}
-                >
-                  {kind === 'offering' ? t('addButton.offering') : t('addButton.catalog')}
-                </Button>
-              )}
-            </TableToolbarContent>
-          </TableToolbar>
-          <Table {...getTableProps()}>
-            <TableHead>
-              <TableRow>
-                {kind === 'offering' && <TableExpandHeader />}
-                {th.map((h) => (
-                  <TableHeader {...getHeaderProps({ header: h })}>
-                    {h.header}
-                  </TableHeader>
-                ))}
-                {canManage && <TableHeader>{t('field.actions')}</TableHeader>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(() => {
-                // Expand column (offerings) + data columns + optional actions.
-                const colSpan = headers.length + (kind === 'offering' ? 1 : 0) + (canManage ? 1 : 0)
-                if (list.loading) {
-                  return (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  )
-                }
-                if (rows.length === 0) {
-                  return (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>
-                        {list.q ? t('empty.noResults', { ns: 'common' }) : t('empty.noData', { ns: 'common' })}
-                      </TableCell>
-                    </TableRow>
-                  )
-                }
-                return rows.map((row) => {
-                  const item = list.items.find((x) => String(x.id) === String(row.id))
-                  if (!item) return null
-                  if (kind !== 'offering') {
-                    return (
-                      <TableRow {...getRowProps({ row })}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === 'classNames') {
-                            const value = cell.value as string[]
-                            return (
-                              <TableCell key={cell.id}>
-                                {Array.isArray(value) && value.length ? listFmt.format(value) : '-'}
-                              </TableCell>
-                            )
-                          }
-                          return <TableCell key={cell.id}>{(cell.value as string) || '-'}</TableCell>
-                        })}
-                        {renderActions(kind, item)}
-                      </TableRow>
-                    )
-                  }
-                  // Offering rows expand into their session list (controlled:
-                  // our expandedIds set drives TableExpandRow/TableExpandedRow).
-                  const offering = item as OfferingView
-                  const idStr = String(offering.id)
-                  const expanded = expandedIds.has(idStr)
-                  return (
-                    <Fragment key={row.id}>
-                      <TableExpandRow
-                        aria-label={t('sessionsExpanded.aria', { name: offering.catalogName })}
-                        isExpanded={expanded}
-                        onExpand={() => toggleExpand(idStr)}
-                      >
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === 'classNames') {
-                            const value = cell.value as string[]
-                            return (
-                              <TableCell key={cell.id}>
-                                {Array.isArray(value) && value.length ? listFmt.format(value) : '-'}
-                              </TableCell>
-                            )
-                          }
-                          return <TableCell key={cell.id}>{(cell.value as string) || '-'}</TableCell>
-                        })}
-                        {renderActions('offering', offering)}
-                      </TableExpandRow>
-                      {expanded && (
-                        <TableExpandedRow colSpan={colSpan}>
-                          <SessionsMiniTable
-                            offering={offering}
-                            entry={sessionsCache[idStr] ?? { data: [], loading: false, error: '' }}
-                            canManage={canManage}
-                            offerings={offeringOptions}
-                            classrooms={classroomOptions}
-                            onMutated={refreshSessionsCache}
-                            onReload={(oid) => void loadSessions(String(oid))}
-                            onViewAll={viewAllSessions}
-                          />
-                        </TableExpandedRow>
-                      )}
-                    </Fragment>
-                  )
-                })
-              })()}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </DataTable>
+  const actionButtons = (
+    onEdit: () => void,
+    onDelete: () => void,
+  ) => (
+    <div className="courses-page__actions">
+      <Button
+        type="text"
+        size="small"
+        aria-label={t('action.edit', { ns: 'common' })}
+        icon={<EditOutlined />}
+        onClick={onEdit}
+      />
+      <Button
+        type="text"
+        size="small"
+        danger
+        aria-label={t('action.delete', { ns: 'common' })}
+        icon={<DeleteOutlined />}
+        onClick={onDelete}
+      />
+    </div>
   )
 
-  return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('title')}</h1>
-        <p className="courses-page__subtitle">{t('subtitle')}</p>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-      </Column>
+  const catalogColumns: TableColumnsType<CatalogCourse> = [
+    { title: t('catalogField.id'), dataIndex: 'id', width: 72 },
+    { title: t('catalogField.name'), dataIndex: 'name', width: 200 },
+    { title: t('catalogField.code'), dataIndex: 'code', width: 140 },
+    {
+      title: t('catalogField.description'),
+      dataIndex: 'description',
+      ellipsis: true,
+      render: (value: string) => value || '-',
+    },
+  ]
 
-      <Column sm={4} md={8} lg={16}>
-        <Tabs selectedIndex={tabIndex} onChange={({ selectedIndex }) => setTabIndex(selectedIndex)}>
-          <TabList aria-label={t('tabs.ariaLabel')}>
-            <Tab>{t('tabs.offerings')}</Tab>
-            <Tab>{t('tabs.catalog')}</Tab>
-            <Tab>{t('tabs.sessions')}</Tab>
-          </TabList>
-          <TabPanels>
-            <TabPanel>
-              {renderTable(offerings, offeringHeaders, 'offering')}
-              <ListPagination
-                page={offerings.page}
-                pageSize={offerings.pageSize}
-                totalItems={offerings.total}
-                onPageChange={offerings.setPage}
-                onPageSizeChange={offerings.setPageSize}
-              />
-            </TabPanel>
-            <TabPanel>
-              {renderTable(catalogList, catalogHeaders, 'catalog')}
-              <ListPagination
-                page={catalogList.page}
-                pageSize={catalogList.pageSize}
-                totalItems={catalogList.total}
-                onPageChange={catalogList.setPage}
-                onPageSizeChange={catalogList.setPageSize}
-              />
-            </TabPanel>
-            <TabPanel>
-              <SessionsPanel
-                active={tabIndex === 2}
-                filterOfferingId={pendingSessionsFilter}
-                onFilterConsumed={() => setPendingSessionsFilter(null)}
-                onMutated={refreshSessionsCache}
-                offerings={offeringOptions}
-                classrooms={classroomOptions}
-              />
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
-      </Column>
+  if (canManage) {
+    catalogColumns.push({
+      title: t('field.actions'),
+      key: 'actions',
+      width: 108,
+      render: (_, c) =>
+        actionButtons(
+          () => openEditCatalog(c),
+          () => setDelTarget({ kind: 'catalog', row: c }),
+        ),
+    })
+  }
+
+  const offeringColumns: TableColumnsType<OfferingView> = [
+    { title: t('offeringField.id'), dataIndex: 'id', width: 72 },
+    { title: t('offeringField.catalogName'), dataIndex: 'catalogName', width: 200, render: (v: string) => v || '-' },
+    { title: t('offeringField.catalogCode'), dataIndex: 'catalogCode', width: 120, render: (v: string) => v || '-' },
+    {
+      title: t('offeringField.teachingClassName'),
+      dataIndex: 'teachingClassName',
+      width: 180,
+      render: (v: string) => v || '-',
+    },
+    {
+      title: t('offeringField.classNames'),
+      dataIndex: 'classNames',
+      width: 200,
+      render: (value: string[]) => (Array.isArray(value) && value.length ? listFmt.format(value) : '-'),
+    },
+    { title: t('offeringField.teacher'), dataIndex: 'teacher', width: 120, render: (v: string) => v || '-' },
+    { title: t('offeringField.semester'), dataIndex: 'semester', width: 130, render: (v: string) => v || '-' },
+  ]
+
+  if (canManage) {
+    offeringColumns.push({
+      title: t('field.actions'),
+      key: 'actions',
+      width: 108,
+      render: (_, o) =>
+        actionButtons(
+          () => openEditOffering(o),
+          () => setDelTarget({ kind: 'offering', row: o }),
+        ),
+    })
+  }
+
+  const tabItems = [
+    {
+      key: 'offerings',
+      label: t('tabs.offerings'),
+      children: (
+        <>
+          <div className="ds-table-toolbar">
+            <span className="ds-table-toolbar__title">{t('table.offering.title')}</span>
+            <span className="ds-table-toolbar__hint">{t('table.offering.description', { count: offerings.total })}</span>
+            <Input
+              allowClear
+              className="ds-table-toolbar__search"
+              placeholder={t('searchPlaceholder')}
+              value={offerings.q}
+              onChange={(e) => offerings.setQ(e.target.value)}
+            />
+            <ExportButton path="/api/offerings/export" fallbackName="offerings.xlsx" onError={setExportError} />
+            {canManage && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setOffForm(emptyOffering)
+                  setOffEditTarget(null)
+                  setOffError('')
+                  setOffCreateOpen(true)
+                }}
+              >
+                {t('addButton.offering')}
+              </Button>
+            )}
+          </div>
+          <Table<OfferingView>
+            rowKey="id"
+            size="middle"
+            columns={offeringColumns}
+            dataSource={offerings.items}
+            loading={offerings.loading}
+            pagination={false}
+            scroll={{ x: 1200 }}
+            locale={{ emptyText: offerings.q ? t('empty.noResults', { ns: 'common' }) : t('empty.noData', { ns: 'common' }) }}
+            expandable={{
+              expandedRowKeys: Array.from(expandedIds),
+              onExpand: (expanded, record) => {
+                const id = String(record.id)
+                if (expanded !== expandedIds.has(id)) toggleExpand(id)
+              },
+              expandedRowRender: (record) => (
+                <SessionsMiniTable
+                  offering={record}
+                  entry={sessionsCache[String(record.id)] ?? { data: [], loading: false, error: '' }}
+                  canManage={canManage}
+                  offerings={offeringOptions}
+                  classrooms={classroomOptions}
+                  onMutated={refreshSessionsCache}
+                  onReload={(oid) => void loadSessions(String(oid))}
+                  onViewAll={viewAllSessions}
+                />
+              ),
+            }}
+          />
+          <ListPagination
+            page={offerings.page}
+            pageSize={offerings.pageSize}
+            totalItems={offerings.total}
+            onPageChange={offerings.setPage}
+            onPageSizeChange={offerings.setPageSize}
+          />
+        </>
+      ),
+    },
+    {
+      key: 'catalog',
+      label: t('tabs.catalog'),
+      children: (
+        <>
+          <div className="ds-table-toolbar">
+            <span className="ds-table-toolbar__title">{t('table.catalog.title')}</span>
+            <span className="ds-table-toolbar__hint">{t('table.catalog.description', { count: catalogList.total })}</span>
+            <Input
+              allowClear
+              className="ds-table-toolbar__search"
+              placeholder={t('searchPlaceholder')}
+              value={catalogList.q}
+              onChange={(e) => catalogList.setQ(e.target.value)}
+            />
+            <ExportButton path="/api/courses/export" fallbackName="catalog.xlsx" onError={setExportError} />
+            {canManage && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setCatForm(emptyCatalog)
+                  setCatEditTarget(null)
+                  setCatError('')
+                  setCatCreateOpen(true)
+                }}
+              >
+                {t('addButton.catalog')}
+              </Button>
+            )}
+          </div>
+          <Table<CatalogCourse>
+            rowKey="id"
+            size="middle"
+            columns={catalogColumns}
+            dataSource={catalogList.items}
+            loading={catalogList.loading}
+            pagination={false}
+            scroll={{ x: 800 }}
+            locale={{
+              emptyText: catalogList.q
+                ? t('empty.noResults', { ns: 'common' })
+                : t('empty.noData', { ns: 'common' }),
+            }}
+          />
+          <ListPagination
+            page={catalogList.page}
+            pageSize={catalogList.pageSize}
+            totalItems={catalogList.total}
+            onPageChange={catalogList.setPage}
+            onPageSizeChange={catalogList.setPageSize}
+          />
+        </>
+      ),
+    },
+    {
+      key: 'sessions',
+      label: t('tabs.sessions'),
+      children: (
+        <SessionsPanel
+          active={tabKey === 'sessions'}
+          filterOfferingId={pendingSessionsFilter}
+          onFilterConsumed={() => setPendingSessionsFilter(null)}
+          onMutated={refreshSessionsCache}
+          offerings={offeringOptions}
+          classrooms={classroomOptions}
+        />
+      ),
+    },
+  ]
+
+  return (
+    <div className="courses-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="courses-page__heading">{t('title')}</h1>
+      <p className="courses-page__subtitle">{t('subtitle')}</p>
+      {error && (
+        <Alert type="error" showIcon title={t('error.load')} description={error} className="courses-page__notice" />
+      )}
+
+      <Tabs activeKey={tabKey} onChange={setTabKey} items={tabItems} />
 
       {/* Offering create/edit modal */}
       <Modal
         open={offCreateOpen}
-        modalHeading={offEditTarget ? t('modal.edit', { name: offEditTarget.catalogName }) : t('modal.offeringCreate')}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => {
+        title={offEditTarget ? t('modal.edit', { name: offEditTarget.catalogName }) : t('modal.offeringCreate')}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => {
           setOffCreateOpen(false)
           setOffEditTarget(null)
         }}
-        onRequestSubmit={submitOffering}
-        primaryButtonDisabled={offSaving}
+        onOk={submitOffering}
+        confirmLoading={offSaving}
+        destroyOnHidden
       >
         <div className="courses-page__form">
-          <Select
-            id="off-catalog"
-            labelText={t('offeringForm.catalog')}
-            value={offForm.catalogId}
-            onChange={(e) => setOffForm({ ...offForm, catalogId: e.target.value })}
-          >
-            <SelectItem value="" text={t('offeringForm.selectCatalog')} />
-            {catalogOptions.map((c) => (
-              <SelectItem
-                key={c.id}
-                value={String(c.id)}
-                text={c.code ? t('offeringForm.courseOption', { name: c.name, code: c.code }) : c.name}
-              />
-            ))}
-          </Select>
-          <Select
-            id="off-teaching-class"
-            labelText={t('offeringForm.teachingClass')}
-            value={offForm.teachingClassId}
-            onChange={(e) => setOffForm({ ...offForm, teachingClassId: e.target.value })}
-          >
-            <SelectItem value="" text={t('offeringForm.selectTeachingClass')} />
-            {teachingClasses.map((tc) => (
-              <SelectItem key={tc.id} value={String(tc.id)} text={tc.name} />
-            ))}
-          </Select>
-          <TextInput
-            id="off-teacher"
-            labelText={t('offeringForm.teacher')}
-            value={offForm.teacher}
-            onChange={(e) => setOffForm({ ...offForm, teacher: e.target.value })}
-          />
-          <TextInput
-            id="off-semester"
-            labelText={t('offeringForm.semester')}
-            placeholder={t('offeringForm.semesterPlaceholder')}
-            value={offForm.semester}
-            onChange={(e) => setOffForm({ ...offForm, semester: e.target.value })}
-          />
-          <TextInput
-            id="off-note"
-            labelText={t('offeringForm.note')}
-            value={offForm.note}
-            onChange={(e) => setOffForm({ ...offForm, note: e.target.value })}
-          />
-          {offError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={offError} lowContrast hideCloseButton />
-          )}
+          <Field label={t('offeringForm.catalog')} htmlFor="off-catalog">
+            <Select
+              id="off-catalog"
+              placeholder={t('offeringForm.selectCatalog')}
+              value={offForm.catalogId || undefined}
+              onChange={(catalogId: string) => setOffForm({ ...offForm, catalogId })}
+              optionFilterProp="label"
+              showSearch
+              options={catalogOptions.map((c) => ({
+                value: String(c.id),
+                label: c.code ? t('offeringForm.courseOption', { name: c.name, code: c.code }) : c.name,
+              }))}
+            />
+          </Field>
+          <Field label={t('offeringForm.teachingClass')} htmlFor="off-teaching-class">
+            <Select
+              id="off-teaching-class"
+              placeholder={t('offeringForm.selectTeachingClass')}
+              value={offForm.teachingClassId || undefined}
+              onChange={(teachingClassId: string) => setOffForm({ ...offForm, teachingClassId })}
+              optionFilterProp="label"
+              showSearch
+              options={teachingClasses.map((tc) => ({ value: String(tc.id), label: tc.name }))}
+            />
+          </Field>
+          <Field label={t('offeringForm.teacher')} htmlFor="off-teacher">
+            <Input
+              id="off-teacher"
+              value={offForm.teacher}
+              onChange={(e) => setOffForm({ ...offForm, teacher: e.target.value })}
+            />
+          </Field>
+          <Field label={t('offeringForm.semester')} htmlFor="off-semester">
+            <Input
+              id="off-semester"
+              placeholder={t('offeringForm.semesterPlaceholder')}
+              value={offForm.semester}
+              onChange={(e) => setOffForm({ ...offForm, semester: e.target.value })}
+            />
+          </Field>
+          <Field label={t('offeringForm.note')} htmlFor="off-note">
+            <Input
+              id="off-note"
+              value={offForm.note}
+              onChange={(e) => setOffForm({ ...offForm, note: e.target.value })}
+            />
+          </Field>
+          {offError && <Alert type="error" showIcon title={t('error.save')} description={offError} />}
         </div>
       </Modal>
 
       {/* Catalog create/edit modal */}
       <Modal
         open={catCreateOpen}
-        modalHeading={catEditTarget ? t('modal.edit', { name: catEditTarget.name }) : t('modal.catalogCreate')}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => {
+        title={catEditTarget ? t('modal.edit', { name: catEditTarget.name }) : t('modal.catalogCreate')}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => {
           setCatCreateOpen(false)
           setCatEditTarget(null)
         }}
-        onRequestSubmit={submitCatalog}
-        primaryButtonDisabled={catSaving}
+        onOk={submitCatalog}
+        confirmLoading={catSaving}
+        destroyOnHidden
       >
         <div className="courses-page__form">
-          <TextInput
-            id="cat-name"
-            labelText={t('catalogForm.name')}
-            value={catForm.name}
-            onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
-          />
-          <TextInput
-            id="cat-code"
-            labelText={t('catalogForm.code')}
-            placeholder={t('catalogForm.codePlaceholder')}
-            value={catForm.code}
-            onChange={(e) => setCatForm({ ...catForm, code: e.target.value })}
-          />
-          <TextInput
-            id="cat-desc"
-            labelText={t('catalogForm.description')}
-            value={catForm.description}
-            onChange={(e) => setCatForm({ ...catForm, description: e.target.value })}
-          />
-          {catError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={catError} lowContrast hideCloseButton />
-          )}
+          <Field label={t('catalogForm.name')} htmlFor="cat-name">
+            <Input
+              id="cat-name"
+              value={catForm.name}
+              onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('catalogForm.code')} htmlFor="cat-code">
+            <Input
+              id="cat-code"
+              placeholder={t('catalogForm.codePlaceholder')}
+              value={catForm.code}
+              onChange={(e) => setCatForm({ ...catForm, code: e.target.value })}
+            />
+          </Field>
+          <Field label={t('catalogForm.description')} htmlFor="cat-desc">
+            <Input
+              id="cat-desc"
+              value={catForm.description}
+              onChange={(e) => setCatForm({ ...catForm, description: e.target.value })}
+            />
+          </Field>
+          {catError && <Alert type="error" showIcon title={t('error.save')} description={catError} />}
         </div>
       </Modal>
 
       {/* Delete modal */}
       <Modal
-        danger
         open={Boolean(delTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDelTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDelTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
         <p className="courses-page__confirm-text">
           {t(`deleteConfirm.${delTarget?.kind ?? 'offering'}`, {
             name: delTarget?.kind === 'offering' ? delTarget.row.catalogName : delTarget?.kind === 'catalog' ? delTarget.row.name : '',
           })}
         </p>
-        {delError && (
-          <InlineNotification kind="error" title={t('error.delete')} subtitle={delError} lowContrast hideCloseButton />
-        )}
+        {delError && <Alert type="error" showIcon title={t('error.delete')} description={delError} />}
       </Modal>
-    </Grid>
+    </div>
   )
 }

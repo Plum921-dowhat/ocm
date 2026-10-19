@@ -1,25 +1,7 @@
 import { useEffect, useState } from 'react'
-import {
-  Button,
-  DataTable,
-  InlineNotification,
-  Modal,
-  Select,
-  SelectItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-  TextInput,
-  type DataTableHeader,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+import { Alert, Button, Input, Modal, Select, Table, type TableColumnsType, DatePicker } from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
@@ -27,6 +9,7 @@ import ExportButton from './ExportButton'
 import ListPagination from './ListPagination'
 import SessionFormModal from './SessionFormModal'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import type { Classroom, OfferingView, SessionView } from '../types/api'
 
 export interface SessionsPanelProps {
@@ -44,9 +27,9 @@ export interface SessionsPanelProps {
 // SessionsPanel is the third tab of the course management page: a flat,
 // full-featured view of all course sessions with combined filters (offering /
 // classroom / date range), fuzzy search, pagination, xlsx export and CRUD via
-// the shared SessionFormModal. Carbon keeps inactive TabPanels mounted but
-// hidden, so the content is gated on first activation to avoid firing the
-// sessions request on every page visit.
+// the shared SessionFormModal. Inactive tabs stay mounted but hidden, so the
+// content is gated on first activation to avoid firing the sessions request on
+// every page visit.
 export default function SessionsPanel(props: SessionsPanelProps) {
   const { active } = props
   const [activated, setActivated] = useState(false)
@@ -61,19 +44,6 @@ function SessionsPanelContent({ filterOfferingId, onFilterConsumed, onMutated, o
   const { t, i18n } = useTranslation('courses')
   const { token, can } = useAuth()
   const canManage = can('course:manage')
-
-  const headers: DataTableHeader[] = [
-    { key: 'id', header: t('sessionField.id') },
-    { key: 'date', header: t('sessionField.date') },
-    { key: 'period', header: t('sessionField.period') },
-    { key: 'courseName', header: t('sessionField.course') },
-    { key: 'teachingClassName', header: t('sessionField.teachingClass') },
-    { key: 'classNames', header: t('sessionField.classNames') },
-    { key: 'teacher', header: t('sessionField.teacher') },
-    { key: 'semester', header: t('sessionField.semester') },
-    { key: 'classroomName', header: t('sessionField.classroom') },
-    { key: 'note', header: t('sessionField.note') },
-  ]
 
   const [offeringId, setOfferingId] = useState(filterOfferingId ?? '')
   const [classroomId, setClassroomId] = useState('')
@@ -144,174 +114,153 @@ function SessionsPanelContent({ filterOfferingId, onFilterConsumed, onMutated, o
     }
   }
 
-  const rows = list.items.map((s) => ({
-    id: String(s.id),
-    date: s.date,
-    period: periodLabel(s),
-    courseName: s.courseName,
-    teachingClassName: s.teachingClassName,
-    classNames: s.classNames,
-    teacher: s.teacher,
-    semester: s.semester,
-    classroomName: s.classroomName,
-    note: s.note,
-  }))
-
-  const colSpan = headers.length + (canManage ? 1 : 0)
-
   // classNames column joins admin-class names with a locale-appropriate
   // separator via Intl.ListFormat narrow style (same as the offerings table).
   const listFmt = new Intl.ListFormat(i18n.language, { style: 'narrow' })
 
+  const columns: TableColumnsType<SessionView> = [
+    { title: t('sessionField.id'), dataIndex: 'id', width: 72 },
+    { title: t('sessionField.date'), dataIndex: 'date', width: 110 },
+    {
+      title: t('sessionField.period'),
+      key: 'period',
+      width: 110,
+      render: (_, s) => periodLabel(s),
+    },
+    { title: t('sessionField.course'), dataIndex: 'courseName', width: 170, ellipsis: true },
+    { title: t('sessionField.teachingClass'), dataIndex: 'teachingClassName', width: 160, ellipsis: true },
+    {
+      title: t('sessionField.classNames'),
+      dataIndex: 'classNames',
+      width: 180,
+      render: (value: string[]) => (Array.isArray(value) && value.length ? listFmt.format(value) : '-'),
+    },
+    { title: t('sessionField.teacher'), dataIndex: 'teacher', width: 110 },
+    { title: t('sessionField.semester'), dataIndex: 'semester', width: 130 },
+    { title: t('sessionField.classroom'), dataIndex: 'classroomName', width: 150 },
+    {
+      title: t('sessionField.note'),
+      dataIndex: 'note',
+      width: 180,
+      ellipsis: true,
+      render: (value: string) => value || '-',
+    },
+  ]
+
+  if (canManage) {
+    columns.push({
+      title: t('field.actions'),
+      key: 'actions',
+      width: 108,
+      fixed: 'right',
+      render: (_, s) => (
+        <div className="courses-page__actions">
+          <Button
+            type="text"
+            size="small"
+            aria-label={t('action.edit', { ns: 'common' })}
+            icon={<EditOutlined />}
+            onClick={() => openEdit(s)}
+          />
+          <Button
+            type="text"
+            size="small"
+            danger
+            aria-label={t('action.delete', { ns: 'common' })}
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              setDelError('')
+              setDelTarget(s)
+            }}
+          />
+        </div>
+      ),
+    })
+  }
+
   return (
     <div className="sessions-panel">
       {error && (
-        <InlineNotification
-          kind="error"
-          title={t('error.load')}
-          subtitle={error}
-          lowContrast
-          hideCloseButton
-          className="courses-page__notice"
-        />
+        <Alert type="error" showIcon title={t('error.load')} description={error} className="courses-page__notice" />
       )}
 
       <div className="sessions-panel__filters">
-        <Select
-          id="sessions-filter-offering"
-          labelText={t('sessionFilter.offering')}
-          value={offeringId}
-          onChange={(e) => setOfferingId(e.target.value)}
-          className="sessions-panel__filter"
-        >
-          <SelectItem value="" text={t('sessionFilter.allOfferings')} />
-          {offerings.map((o) => (
-            <SelectItem
-              key={o.id}
-              value={String(o.id)}
-              text={[o.catalogName, o.teachingClassName, o.teacher].filter(Boolean).join(' / ')}
-            />
-          ))}
-        </Select>
-        <Select
-          id="sessions-filter-classroom"
-          labelText={t('sessionFilter.classroom')}
-          value={classroomId}
-          onChange={(e) => setClassroomId(e.target.value)}
-          className="sessions-panel__filter"
-        >
-          <SelectItem value="" text={t('sessionFilter.allClassrooms')} />
-          {classrooms.map((c) => (
-            <SelectItem key={c.id} value={String(c.id)} text={c.name} />
-          ))}
-        </Select>
-        <TextInput
-          id="sessions-filter-from"
-          type="date"
-          labelText={t('sessionFilter.from')}
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className="sessions-panel__filter"
-        />
-        <TextInput
-          id="sessions-filter-to"
-          type="date"
-          labelText={t('sessionFilter.to')}
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="sessions-panel__filter"
-        />
+        <Field label={t('sessionFilter.offering')} htmlFor="sessions-filter-offering" className="sessions-panel__filter">
+          <Select
+            id="sessions-filter-offering"
+            value={offeringId}
+            onChange={(value: string) => setOfferingId(value)}
+            options={[
+              { value: '', label: t('sessionFilter.allOfferings') },
+              ...offerings.map((o) => ({
+                value: String(o.id),
+                label: [o.catalogName, o.teachingClassName, o.teacher].filter(Boolean).join(' / '),
+              })),
+            ]}
+          />
+        </Field>
+        <Field label={t('sessionFilter.classroom')} htmlFor="sessions-filter-classroom" className="sessions-panel__filter">
+          <Select
+            id="sessions-filter-classroom"
+            value={classroomId}
+            onChange={(value: string) => setClassroomId(value)}
+            options={[
+              { value: '', label: t('sessionFilter.allClassrooms') },
+              ...classrooms.map((c) => ({ value: String(c.id), label: c.name })),
+            ]}
+          />
+        </Field>
+        <Field label={t('sessionFilter.from')} htmlFor="sessions-filter-from" className="sessions-panel__filter">
+          <DatePicker
+            id="sessions-filter-from"
+            allowClear={false}
+            value={from ? dayjs(from) : null}
+            onChange={(d) => setFrom(d ? d.format('YYYY-MM-DD') : '')}
+          />
+        </Field>
+        <Field label={t('sessionFilter.to')} htmlFor="sessions-filter-to" className="sessions-panel__filter">
+          <DatePicker
+            id="sessions-filter-to"
+            allowClear={false}
+            value={to ? dayjs(to) : null}
+            onChange={(d) => setTo(d ? d.format('YYYY-MM-DD') : '')}
+          />
+        </Field>
       </div>
 
-      <DataTable rows={rows} headers={headers}>
-        {({ rows: tableRows, headers: th, getTableProps, getHeaderProps, getToolbarProps }) => (
-          <TableContainer title={t('table.sessions.title')} description={t('table.sessions.description', { count: list.total })}>
-            <TableToolbar {...getToolbarProps()}>
-              <TableToolbarContent>
-                <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('searchPlaceholder')} />
-                <ExportButton
-                  path={`/api/sessions/export?${exportParams.toString()}`}
-                  fallbackName="sessions.xlsx"
-                  onError={setActionError}
-                />
-                {canManage && (
-                  <Button renderIcon={Add} size="sm" onClick={openAdd}>
-                    {t('sessionsExpanded.add')}
-                  </Button>
-                )}
-              </TableToolbarContent>
-            </TableToolbar>
-            <Table {...getTableProps()}>
-              <TableHead>
-                <TableRow>
-                  {th.map((header) => (
-                    <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
-                  ))}
-                  {canManage && <TableHeader>{t('field.actions')}</TableHeader>}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {list.loading ? (
-                  <TableRow>
-                    <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                  </TableRow>
-                ) : tableRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={colSpan}>
-                      {list.q ? t('empty.noResults', { ns: 'common' }) : t('empty.noData', { ns: 'common' })}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  tableRows.map((row) => {
-                    const s = list.items.find((x) => String(x.id) === String(row.id))
-                    if (!s) return null
-                    return (
-                      <TableRow key={row.id}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === 'classNames') {
-                            const value = cell.value as string[]
-                            return (
-                              <TableCell key={cell.id}>
-                                {Array.isArray(value) && value.length ? listFmt.format(value) : '-'}
-                              </TableCell>
-                            )
-                          }
-                          return <TableCell key={cell.id}>{(cell.value as string) || '-'}</TableCell>
-                        })}
-                        {canManage && (
-                          <TableCell>
-                            <div className="courses-page__actions">
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                hasIconOnly
-                                renderIcon={Edit}
-                                iconDescription={t('action.edit', { ns: 'common' })}
-                                onClick={() => openEdit(s)}
-                              />
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                hasIconOnly
-                                renderIcon={TrashCan}
-                                iconDescription={t('action.delete', { ns: 'common' })}
-                                onClick={() => {
-                                  setDelError('')
-                                  setDelTarget(s)
-                                }}
-                              />
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.sessions.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.sessions.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
+        />
+        <ExportButton
+          path={`/api/sessions/export?${exportParams.toString()}`}
+          fallbackName="sessions.xlsx"
+          onError={setActionError}
+        />
+        {canManage && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+            {t('sessionsExpanded.add')}
+          </Button>
         )}
-      </DataTable>
+      </div>
+
+      <Table<SessionView>
+        rowKey="id"
+        size="small"
+        columns={columns}
+        dataSource={list.items}
+        loading={list.loading}
+        pagination={false}
+        scroll={{ x: 1440 }}
+        locale={{ emptyText: list.q ? t('empty.noResults', { ns: 'common' }) : t('empty.noData', { ns: 'common' }) }}
+      />
+
       <ListPagination
         page={list.page}
         pageSize={list.pageSize}
@@ -333,14 +282,15 @@ function SessionsPanelContent({ filterOfferingId, onFilterConsumed, onMutated, o
       />
 
       <Modal
-        danger
         open={Boolean(delTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDelTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDelTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
         <p className="courses-page__confirm-text">
           {t('sessionModal.deleteConfirm', {
@@ -349,7 +299,7 @@ function SessionsPanelContent({ filterOfferingId, onFilterConsumed, onMutated, o
             classroom: delTarget?.classroomName ?? '',
           })}
         </p>
-        {delError && <InlineNotification kind="error" title={t('error.delete')} subtitle={delError} lowContrast hideCloseButton />}
+        {delError && <Alert type="error" showIcon title={t('error.delete')} description={delError} />}
       </Modal>
     </div>
   )

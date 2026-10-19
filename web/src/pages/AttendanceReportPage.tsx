@@ -1,28 +1,11 @@
 import { useState } from 'react'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Column,
-  ComboBox,
-  DataTable,
-  Grid,
-  InlineNotification,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  type DataTableHeader,
-} from '@carbon/react'
+import { Alert, Breadcrumb, Select, Table, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
+import Field from '../ui/Field'
 import type { OfferingSummary, OfferingView, Paged, SummaryRow } from '../types/api'
 import { STATUS_KEYS, StatusTag, formatDateTime, type PickerOption } from './attendanceUi'
 
@@ -65,11 +48,12 @@ export default function AttendanceReportPage() {
     }
   }
 
-  const handlePickOffering = (e: { selectedItem?: PickerOption | null }) => {
-    setPickOffering(e.selectedItem ?? null)
+  const handlePickOffering = (offeringId: string) => {
+    const picked = offerings.find((o) => o.id === offeringId) ?? null
+    setPickOffering(picked)
     setSummary(null)
     setError('')
-    if (e.selectedItem) loadSummary(e.selectedItem.id)
+    if (picked) loadSummary(picked.id)
   }
 
   const loadSummary = async (offeringId: string) => {
@@ -86,17 +70,7 @@ export default function AttendanceReportPage() {
     }
   }
 
-  const baseHeaders: DataTableHeader[] = [
-    { key: 'displayName', header: t('report.field.name') },
-    { key: 'studentNo', header: t('report.field.studentNo') },
-    { key: 'adminClass', header: t('report.field.adminClass') },
-  ]
   const checkins = summary?.checkins ?? []
-  const headers: DataTableHeader[] = [
-    ...baseHeaders,
-    ...checkins.map((c) => ({ key: `c${c.id}`, header: c.startsAt.slice(0, 10) })),
-    { key: 'totals', header: t('report.field.totals') },
-  ]
 
   const buildRow = (r: SummaryRow): ReportRow => {
     const row: ReportRow = { id: String(r.userId), displayName: r.displayName, studentNo: r.studentNo, adminClass: r.adminClass, totals: '' }
@@ -108,165 +82,158 @@ export default function AttendanceReportPage() {
   }
   const rows = (summary?.rows ?? []).map(buildRow)
 
+  const columns: TableColumnsType<ReportRow> = [
+    {
+      title: t('report.field.name'),
+      dataIndex: 'displayName',
+      width: 140,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('report.field.studentNo'),
+      dataIndex: 'studentNo',
+      width: 130,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('report.field.adminClass'),
+      dataIndex: 'adminClass',
+      width: 160,
+      render: (value: string) => value || '-',
+    },
+    ...checkins.map((c) => ({
+      title: c.startsAt.slice(0, 10),
+      dataIndex: `c${c.id}`,
+      key: `c${c.id}`,
+      width: 100,
+      render: (value: string) => (value ? <StatusTag status={value} /> : <span className="attendance-report__empty">—</span>),
+    })),
+    { title: t('report.field.totals'), dataIndex: 'totals', width: 130 },
+  ]
+
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem
-            href="/attendance"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/attendance')
-            }}
-          >
-            {t('breadcrumb.attendance')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.report')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('report.title')}</h1>
-        <p className="courses-page__subtitle">{t('report.subtitle')}</p>
-      </Column>
+    <div className="courses-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          {
+            title: (
+              <a
+                href="/attendance"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/attendance')
+                }}
+              >
+                {t('breadcrumb.attendance')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.report') },
+        ]}
+      />
+      <h1 className="courses-page__heading">{t('report.title')}</h1>
+      <p className="courses-page__subtitle">{t('report.subtitle')}</p>
 
-      <Column sm={4} md={8} lg={16}>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('report.error.load')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
+      {error && (
+        <Alert type="error" showIcon title={t('report.error.load')} description={error} className="courses-page__notice" />
+      )}
+
+      <div className="courses-page__picker">
+        <Field label={t('report.offering')} htmlFor="report-offering">
+          <Select
+            id="report-offering"
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('report.offeringPlaceholder')}
+            value={pickOffering?.id}
+            onChange={(value: string) => handlePickOffering(value)}
+            onFocus={() => {
+              if (offerings.length === 0) loadOfferings()
+            }}
+            options={offerings.map((o) => ({ value: o.id, label: o.text }))}
           />
-        )}
-        <ComboBox
-          id="report-offering"
-          titleText={t('report.offering')}
-          placeholder={t('report.offeringPlaceholder')}
-          items={offerings}
-          itemToString={(item) => (item ? item.text : '')}
-          selectedItem={pickOffering}
-          onChange={handlePickOffering}
-          shouldFilterItem={() => true}
-          onFocus={() => {
-            if (offerings.length === 0) loadOfferings()
-          }}
-        />
+        </Field>
+      </div>
 
-        {summary && (
-          <>
-            <p className="courses-page__subtitle">
-              {summary.courseName} · {summary.teachingClassName} · {summary.semester} ·{' '}
-              {t('report.summaryTeacher', { teacher: summary.teacher || '-' })} ·{' '}
-              {t('report.summaryCheckins', { count: checkins.length })} ·{' '}
-              {t('report.summaryStudents', { count: summary.rows.length })}
-            </p>
-            {checkins.length === 0 && (
-              <InlineNotification
-                kind="warning"
-                title={t('report.warning.noCheckinsTitle')}
-                subtitle={t('report.warning.noCheckinsSubtitle')}
-                lowContrast
-                hideCloseButton
-                className="courses-page__notice"
-              />
-            )}
-            {summary.rows.every((r) => !r.inRoster) && (
-              <InlineNotification
-                kind="warning"
-                title={t('report.warning.emptyRosterTitle')}
-                subtitle={t('report.warning.emptyRosterSubtitle')}
-                lowContrast
-                hideCloseButton
-                className="courses-page__notice"
-              />
-            )}
-          </>
-        )}
-
-        {summary && checkins.length > 0 && (
-          <DataTable rows={rows} headers={headers}>
-            {({ rows: tableRows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-              <TableContainer title={t('report.table.title')} description={t('report.table.description')}>
-                <TableToolbar {...getToolbarProps()}>
-                  <TableToolbarContent>
-                    <ExportButton
-                      path={`/api/checkins/export?offering_id=${pickOffering?.id}`}
-                      fallbackName="attendance-report.xlsx"
-                      onError={setError}
-                    />
-                  </TableToolbarContent>
-                </TableToolbar>
-                <Table {...getTableProps()} size="sm">
-                  <TableHead>
-                    <TableRow>
-                      {tableHeaders.map((header) => (
-                        <TableHeader {...getHeaderProps({ header })}>
-                          {header.header}
-                        </TableHeader>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={headers.length}>{t('report.empty.loading')}</TableCell>
-                      </TableRow>
-                    ) : tableRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={headers.length}>{t('report.empty.none')}</TableCell>
-                      </TableRow>
-                    ) : (
-                      tableRows.map((row) => (
-                        <TableRow {...getRowProps({ row })}>
-                            {row.cells.map((cell) => {
-                              if (cell.info.header === 'displayName' || cell.info.header === 'studentNo' || cell.info.header === 'adminClass') {
-                                return <TableCell key={cell.id}>{cell.value || '-'}</TableCell>
-                              }
-                              if (cell.info.header === 'totals') {
-                                return <TableCell key={cell.id}>{cell.value}</TableCell>
-                              }
-                              const status = cell.value as string
-                              return (
-                                <TableCell key={cell.id}>
-                                  {status ? <StatusTag status={status} /> : <span className="attendance-report__empty">—</span>}
-                                </TableCell>
-                              )
-                            })}
-                          </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </DataTable>
-        )}
-        {loading && <p>{t('report.empty.loading')}</p>}
-        {!summary && !loading && !error && (
-          <p className="courses-page__subtitle">{t('report.noSelection')}</p>
-        )}
-        {/* Legend for the matrix */}
-        {summary && checkins.length > 0 && (
+      {summary && (
+        <>
           <p className="courses-page__subtitle">
-            {t('report.legend')}{' '}
-            {STATUS_KEYS.map((value) => (
-              <span key={value} className="attendance-report__legend">
-                <StatusTag status={value} /> {t('status.' + value, { ns: 'common' })}
-              </span>
-            ))}{' '}
-            {t('report.lastStarted', { time: formatDateTime(checkins[0]?.startsAt) })}
+            {summary.courseName} · {summary.teachingClassName} · {summary.semester} ·{' '}
+            {t('report.summaryTeacher', { teacher: summary.teacher || '-' })} ·{' '}
+            {t('report.summaryCheckins', { count: checkins.length })} ·{' '}
+            {t('report.summaryStudents', { count: summary.rows.length })}
           </p>
-        )}
-      </Column>
-    </Grid>
+          {checkins.length === 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              title={t('report.warning.noCheckinsTitle')}
+              description={t('report.warning.noCheckinsSubtitle')}
+              className="courses-page__notice"
+            />
+          )}
+          {summary.rows.every((r) => !r.inRoster) && (
+            <Alert
+              type="warning"
+              showIcon
+              title={t('report.warning.emptyRosterTitle')}
+              description={t('report.warning.emptyRosterSubtitle')}
+              className="courses-page__notice"
+            />
+          )}
+        </>
+      )}
+
+      {summary && checkins.length > 0 && (
+        <>
+          <div className="ds-table-toolbar">
+            <span className="ds-table-toolbar__title">{t('report.table.title')}</span>
+            <span className="ds-table-toolbar__hint">{t('report.table.description')}</span>
+            <ExportButton
+              path={`/api/checkins/export?offering_id=${pickOffering?.id}`}
+              fallbackName="attendance-report.xlsx"
+              onError={setError}
+            />
+          </div>
+          <Table<ReportRow>
+            rowKey="id"
+            size="small"
+            columns={columns}
+            dataSource={rows}
+            loading={loading}
+            pagination={false}
+            scroll={{ x: 560 + checkins.length * 100 }}
+            locale={{ emptyText: loading ? t('report.empty.loading') : t('report.empty.none') }}
+          />
+        </>
+      )}
+      {loading && <p>{t('report.empty.loading')}</p>}
+      {!summary && !loading && !error && <p className="courses-page__subtitle">{t('report.noSelection')}</p>}
+      {/* Legend for the matrix */}
+      {summary && checkins.length > 0 && (
+        <p className="courses-page__subtitle">
+          {t('report.legend')}{' '}
+          {STATUS_KEYS.map((value) => (
+            <span key={value} className="attendance-report__legend">
+              <StatusTag status={value} /> {t('status.' + value, { ns: 'common' })}
+            </span>
+          ))}{' '}
+          {t('report.lastStarted', { time: formatDateTime(checkins[0]?.startsAt) })}
+        </p>
+      )}
+    </div>
   )
 }

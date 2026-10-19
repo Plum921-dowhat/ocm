@@ -28,6 +28,18 @@ export type ThemeName = (typeof THEME_NAMES)[number]
 export const THEME_PREFERENCES = ['system', ...THEME_NAMES] as const
 export type ThemePreference = (typeof THEME_PREFERENCES)[number]
 
+// The palette picker only offers three choices now that the shell is Ant
+// Design: follow the OS, or force light/dark. The remaining Carbon names stay
+// accepted so preferences stored before the migration keep working; they are
+// folded into the equivalent choice on read.
+export const THEME_CHOICES = ['system', 'g10', 'g100'] as const
+export type ThemeChoice = (typeof THEME_CHOICES)[number]
+
+const LEGACY_CHOICES: Record<string, ThemeChoice> = {
+  white: 'g10',
+  g90: 'g100',
+}
+
 /** Colour mode shared by Carbon (via cds-- classes) and Ant Design. */
 export type ColorScheme = 'light' | 'dark'
 
@@ -61,7 +73,7 @@ function readPreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if ((THEME_PREFERENCES as readonly string[]).includes(stored ?? '')) {
-      return stored as ThemePreference
+      return LEGACY_CHOICES[stored as string] ?? (stored as ThemePreference)
     }
   } catch {
     // localStorage unavailable (private mode etc.) - fall through to default.

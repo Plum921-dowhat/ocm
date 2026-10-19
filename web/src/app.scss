@@ -1,6 +1,55 @@
 @use '@carbon/styles/scss/spacing' as *;
 @use '@carbon/styles/scss/type' as *;
 
+// --- Design tokens -----------------------------------------------------------
+// The page styles in this file were written against Carbon's custom properties.
+// Now that the components are Ant Design, those properties are defined here
+// from the product's own palette, so the leftovers no longer inherit IBM's
+// grey/blue scale (and dropping @carbon/styles later cannot change the look).
+//
+// Names keep the `cds-` prefix on purpose: it is the contract every rule below
+// already uses, and it keeps this bridge removable in one block.
+:root {
+  --cds-text-primary: #1f2329;
+  --cds-text-secondary: #646a73;
+  --cds-border-subtle: #e5e6eb;
+  --cds-border-interactive: #2b5ff6;
+  --cds-border-inverse: #1f2329;
+  --cds-link-primary: #2b5ff6;
+  --cds-interactive: #2b5ff6;
+  --cds-focus: #2b5ff6;
+  --cds-layer: #ffffff;
+  --cds-layer-01: #ffffff;
+  --cds-layer-02: #f7f8fa;
+  --cds-layer-accent-01: #f2f3f5;
+  --cds-layer-hover: #f2f3f5;
+  --cds-layer-hover-01: #f2f3f5;
+  --cds-layer-selected: #e8f0ff;
+  --cds-layer-selected-hover: #dbe7ff;
+  --cds-background: #f5f7fa;
+}
+
+.cds--g90,
+.cds--g100 {
+  --cds-text-primary: #f2f3f5;
+  --cds-text-secondary: #a9aeb8;
+  --cds-border-subtle: #33363d;
+  --cds-border-interactive: #6b8cff;
+  --cds-border-inverse: #f2f3f5;
+  --cds-link-primary: #6b8cff;
+  --cds-interactive: #6b8cff;
+  --cds-focus: #6b8cff;
+  --cds-layer: #1c1f24;
+  --cds-layer-01: #1c1f24;
+  --cds-layer-02: #23262b;
+  --cds-layer-accent-01: #2a2d33;
+  --cds-layer-hover: #2a2d33;
+  --cds-layer-hover-01: #2a2d33;
+  --cds-layer-selected: #1e2a44;
+  --cds-layer-selected-hover: #24344f;
+  --cds-background: #14161a;
+}
+
 // Typography is the strongest visual signal of the design system, so the app
 // uses the platform UI stack (Ant Design's default) instead of IBM Plex Sans.
 // Carbon's stylesheet sets the IBM Plex stack on <body>; this rule loads later
@@ -737,7 +786,7 @@ body {
 
 // --- Users page -------------------------------------------------------------
 .users-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .users-page__heading {
@@ -775,6 +824,10 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: $spacing-02;
+
+  .ant-tag {
+    margin-inline-end: 0;
+  }
 }
 
 .users-page__readonly {
@@ -813,6 +866,19 @@ body {
   margin-block-end: $spacing-04;
 }
 
+.users-page__perm-group-name {
+  margin-block-end: $spacing-02;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+}
+
+.users-page__perm-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-03 $spacing-05;
+}
+
 .users-page__grants-empty {
   @include type-style('body-01');
   color: var(--cds-text-secondary);
@@ -820,7 +886,7 @@ body {
 
 // --- Roles page --------------------------------------------------------------
 .roles-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .roles-page__heading {
@@ -854,8 +920,19 @@ body {
   display: flex;
   flex-direction: column;
   gap: $spacing-04;
-  max-height: 22rem;
-  overflow-y: auto;
+}
+
+.roles-page__perm-group-name {
+  margin-block-end: $spacing-02;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+}
+
+.roles-page__perm-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-03 $spacing-05;
 }
 
 .roles-page__confirm-text {
@@ -899,7 +976,7 @@ body {
 }
 
 .classrooms-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .classrooms-page__heading {
@@ -935,7 +1012,7 @@ body {
 
 /* ---- course / schedule / timetable shared ---- */
 .courses-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .courses-page__heading {
@@ -1073,11 +1150,46 @@ body {
   @include type-style('body-01');
 }
 
-.courses-page__add {
+/* ---- bookings page ---- */
+.bookings-page {
+  padding: $spacing-07;
+}
+
+.bookings-page__heading {
+  @include type-style('heading-05');
+  margin-block-start: $spacing-05;
+}
+
+.bookings-page__subtitle {
+  @include type-style('body-01');
+  color: var(--cds-text-secondary);
+  margin-block: $spacing-03 $spacing-06;
+}
+
+.bookings-page__notice {
   margin-block-end: $spacing-05;
 }
 
-/* ---- bookings page ---- */
+.bookings-page__actions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-01;
+}
+
+.bookings-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.bookings-page__confirm-text {
+  @include type-style('body-01');
+}
+
+.bookings-page__muted {
+  color: var(--cds-text-secondary);
+}
+
 .bookings-page__filters {
   display: flex;
   flex-wrap: wrap;
@@ -1089,6 +1201,7 @@ body {
 .bookings-page__filter {
   flex: 1 1 12rem;
   min-width: 12rem;
+  max-inline-size: 18rem;
 }
 
 .bookings-page__busy {
@@ -1651,6 +1764,13 @@ body {
   color: var(--cds-text-secondary);
 }
 
+.settings-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-05;
+}
+
 .settings-page__heading {
   @include type-style('heading-05');
   margin-block-start: $spacing-05;
@@ -1659,24 +1779,128 @@ body {
 .settings-page__subtitle {
   @include type-style('body-01');
   color: var(--cds-text-secondary);
-  margin-block: $spacing-03 $spacing-07;
+  margin-block: $spacing-03 $spacing-06;
 }
 
-.settings-page__section {
-  margin-block-start: $spacing-09;
+.settings-page__readonly {
+  margin-block-start: $spacing-07;
+  margin-inline-end: 0;
+}
+
+.settings-stack {
   display: flex;
   flex-direction: column;
   gap: $spacing-05;
-  max-inline-size: 24rem;
 }
 
-.settings-page__section-heading {
+.settings-card {
+  .ant-card-body {
+    padding-block-end: 0;
+  }
+}
+
+.settings-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-06;
+}
+
+.settings-card__title {
   @include type-style('heading-03');
+  margin: 0;
 }
 
-.settings-page__section-hint {
+.settings-card__hint {
+  max-inline-size: 72ch;
+  margin-block: $spacing-02 0;
   @include type-style('body-01');
   color: var(--cds-text-secondary);
+}
+
+.settings-card__status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.settings-card__tag {
+  margin-inline-end: 0;
+}
+
+.settings-card__divider {
+  margin-block: $spacing-05 $spacing-02;
+}
+
+.settings-card__body {
+  display: flex;
+  flex-direction: column;
+
+  > .ant-alert {
+    margin-block-end: $spacing-03;
+  }
+}
+
+// Label-left / control-right rows read as a configuration table rather than a
+// stack of stretched inputs.
+.settings-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 460px);
+  gap: $spacing-05;
+  align-items: start;
+  padding-block: $spacing-03;
+
+  .ant-input-number {
+    inline-size: 140px;
+  }
+}
+
+.settings-row__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block-start: 6px;
+  @include type-style('body-01');
+}
+
+.settings-row__hint {
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+}
+
+.settings-row__control {
+  min-inline-size: 0;
+}
+
+.settings-card__footer {
+  margin-block-start: $spacing-03;
+  border-block-start: 1px solid var(--cds-border-subtle);
+}
+
+.settings-card__save {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $spacing-05;
+  padding-block: $spacing-04;
+}
+
+.settings-card__save-state {
+  margin-inline-end: auto;
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+}
+
+@media screen and (max-width: 720px) {
+  .settings-row {
+    grid-template-columns: 1fr;
+    gap: $spacing-02;
+  }
+
+  .settings-row__label {
+    padding-block-start: 0;
+  }
 }
 
 // --- AI 助手 (Carbon AI Chat 浮窗,自定义 user_defined 项) ---
@@ -2103,4 +2327,198 @@ body {
 
 .imports-page__muted {
   color: var(--cds-text-secondary);
+}
+
+// --- Table/form batch pages -------------------------------------------------
+// These pages reused the shared `courses-page__*` helpers before the migration;
+// they now own their class names, so the primitives are declared once here
+// instead of per page.
+
+.admin-classes-page,
+.teaching-classes-page,
+.observations-page {
+  padding: $spacing-07;
+}
+
+.admin-classes-page__heading,
+.teaching-classes-page__heading,
+.observations-page__heading {
+  @include type-style('heading-05');
+  margin-block-start: $spacing-05;
+}
+
+.admin-classes-page__subtitle,
+.teaching-classes-page__subtitle,
+.observations-page__subtitle {
+  @include type-style('body-01');
+  color: var(--cds-text-secondary);
+  margin-block: $spacing-03 $spacing-07;
+}
+
+.admin-classes-page__notice,
+.teaching-classes-page__notice,
+.observations-page__notice {
+  margin-block-end: $spacing-05;
+}
+
+.admin-classes-page__form,
+.teaching-classes-page__form,
+.observations-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.admin-classes-page__confirm-text,
+.teaching-classes-page__confirm-text,
+.observations-page__confirm-text {
+  @include type-style('body-01');
+}
+
+.admin-classes-page__actions,
+.teaching-classes-page__actions,
+.observations-page__actions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-02;
+}
+
+.admin-classes-page__member-add {
+  display: flex;
+  gap: $spacing-03;
+  align-items: flex-end;
+}
+
+.admin-classes-page__members-title {
+  @include type-style('heading-03');
+  margin-block-end: $spacing-02;
+}
+
+.settings-page {
+  // Extra bottom room so the floating AI chat button never covers the last
+  // card's save bar.
+  padding: $spacing-07 $spacing-07 ($spacing-07 + 4.5rem);
+  max-inline-size: 1120px;
+}
+
+.settings-page__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-05;
+}
+
+// IoT detail: the function cards put a field and its action button on one row.
+.iot-function-card__actions .ds-field {
+  flex: 1 1 12rem;
+}
+
+.courses-page__picker {
+  inline-size: 100%;
+}
+
+.ds-table-toolbar__filter {
+  inline-size: 180px;
+}
+
+// Timetable picker: a long period list must scroll inside the viewport
+// instead of pushing the modal's footer off screen.
+.timetable-picker .ant-modal-body {
+  max-block-size: calc(100vh - 260px);
+  overflow-y: auto;
+}
+
+.timetable-picker .ant-alert {
+  margin-block-end: $spacing-03;
+}
+
+// Split wizard: tags sit in a flow, not as inline chips with trailing margins.
+.imports-page__wizard .ant-tag {
+  margin-inline-end: 0;
+}
+
+// Observation form: sectioned long-form layout (was Carbon's stacked form).
+.observations-page__form-modal .ant-modal-body {
+  max-block-size: calc(100vh - 220px);
+  overflow-y: auto;
+}
+
+.observations-page__section > .ant-alert,
+.observations-page__section-title {
+  margin-block-end: $spacing-03;
+}
+
+.observations-page__section-title {
+  @include type-style('heading-03');
+}
+
+.observations-page__sections {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.observations-page__legend {
+  @include type-style('heading-03');
+  margin-block-end: $spacing-03;
+  padding: 0;
+}
+
+.observations-page__indicator {
+  padding-block: $spacing-03;
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+
+.observations-page__indicator-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-03;
+}
+
+.observations-page__indicator-title {
+  font-weight: 600;
+}
+
+.observations-page__indicator-line {
+  margin: $spacing-02 0 0;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.observations-page__matrix-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.observations-page__matrix-table th,
+.observations-page__matrix-table td {
+  padding: $spacing-02 $spacing-03;
+  border-block-end: 1px solid var(--cds-border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.observations-page__matrix-question {
+  min-inline-size: 12rem;
+}
+
+.observations-page__muted {
+  color: var(--cds-text-secondary);
+}
+
+.courses-page__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-block-end: 16px;
+}
+
+// Pinned action columns: a hairline makes it obvious the column is pinned over
+// the scrollable content, instead of looking like clipped text.
+.ant-table-thead > tr > .ant-table-cell-fix-right,
+.ant-table-tbody > tr > .ant-table-cell-fix-right {
+  border-inline-start: 1px solid var(--cds-border-subtle);
 }

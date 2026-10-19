@@ -1,31 +1,18 @@
 import { useEffect, useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
+  DatePicker,
+  Input,
   Modal,
   Select,
-  SelectItem,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
   Tag,
-  TextInput,
-  type DataTableHeader,
-  type TagProps,
-} from '@carbon/react'
-import { Add } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -33,14 +20,15 @@ import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import { formatDate } from '../i18n/formatters'
 import { ApiError, type BookingInput, type BookingView, type Classroom, type Paged, type Period, type Regime, type SessionView } from '../types/api'
 
-const STATUS_KIND: Record<string, TagProps<'div'>['type']> = {
+const STATUS_COLOR: Record<string, string> = {
   pending: 'blue',
   approved: 'green',
   rejected: 'red',
-  cancelled: 'gray',
+  cancelled: 'default',
 }
 
 // Booking status enum values shown in the status filter dropdown.
@@ -50,8 +38,8 @@ function pad(n: number) {
   return String(n).padStart(2, '0')
 }
 
-// fmt produces an ISO YYYY-MM-DD string for <input type="date"> values, which
-// are locale-independent (the display formatting is handled separately).
+// fmt produces an ISO YYYY-MM-DD string for the filter state; display
+// formatting is handled separately.
 function fmt(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
@@ -71,16 +59,6 @@ export default function BookingsPage() {
   const { token, user: currentUser, can } = useAuth()
   const navigate = useNavigate()
   const canApprove = can('booking:approve')
-
-  const headers: DataTableHeader[] = [
-    { key: 'classroomName', header: t('field.classroom') },
-    { key: 'date', header: t('field.date') },
-    { key: 'period', header: t('field.period') },
-    { key: 'purpose', header: t('field.purpose') },
-    { key: 'status', header: t('field.status') },
-    { key: 'displayName', header: t('field.bookedBy') },
-    { key: 'createdAt', header: t('field.createdAt') },
-  ]
 
   const periodLabel = (b?: BookingView | null) => {
     if (!b) return ''
@@ -240,19 +218,6 @@ export default function BookingsPage() {
     }
   }
 
-  const rows = list.items.map((b) => ({
-    id: String(b.id),
-    classroomName: b.classroomName,
-    date: b.date,
-    period: periodLabel(b),
-    purpose: b.purpose,
-    status: b.status,
-    displayName: b.displayName,
-    createdAt: b.createdAt,
-  }))
-
-  const colSpan = headers.length + 1
-
   // The busy-periods hint joins numbers with a locale-appropriate separator
   // (zh: "1、2、3", en: "1, 2, 3") via Intl.ListFormat narrow style.
   const busyText =
@@ -268,308 +233,263 @@ export default function BookingsPage() {
   if (from) exportParams.set('from', from)
   if (to) exportParams.set('to', to)
 
+  const columns: TableColumnsType<BookingView> = [
+    { title: t('field.classroom'), dataIndex: 'classroomName', width: 160 },
+    { title: t('field.date'), dataIndex: 'date', width: 120 },
+    {
+      title: t('field.period'),
+      key: 'period',
+      width: 120,
+      render: (_, b) => periodLabel(b),
+    },
+    { title: t('field.purpose'), dataIndex: 'purpose', ellipsis: true },
+    {
+      title: t('field.status'),
+      dataIndex: 'status',
+      width: 110,
+      render: (value: string) => (
+        <Tag color={STATUS_COLOR[value] ?? 'default'}>
+          {t('status.' + value, { ns: 'common', defaultValue: value })}
+        </Tag>
+      ),
+    },
+    { title: t('field.bookedBy'), dataIndex: 'displayName', width: 130 },
+    {
+      title: t('field.createdAt'),
+      dataIndex: 'createdAt',
+      width: 170,
+      render: (value: string) => formatDate(value),
+    },
+    {
+      title: t('field.actions'),
+      key: 'actions',
+      width: 168,
+      fixed: 'right',
+      render: (_, b) => {
+        const canCancel =
+          (b.status === 'pending' || b.status === 'approved') &&
+          (canApprove || Number(currentUser?.id) === b.userId)
+        const canReview = canApprove && b.status === 'pending'
+        if (!canCancel && !canReview) return <span className="bookings-page__muted">—</span>
+        return (
+          <div className="bookings-page__actions">
+            {canCancel && (
+              <Button size="small" disabled={actingId === b.id} onClick={() => setCancelTarget(b)}>
+                {t('action.cancel')}
+              </Button>
+            )}
+            {canReview && (
+              <>
+                <Button size="small" disabled={actingId === b.id} onClick={() => reviewBooking(b.id, 'approve')}>
+                  {t('action.approve')}
+                </Button>
+                <Button size="small" danger disabled={actingId === b.id} onClick={() => reviewBooking(b.id, 'reject')}>
+                  {t('action.reject')}
+                </Button>
+              </>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
+
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('title')}</h1>
-        <p className="courses-page__subtitle">{t('subtitle')}</p>
-      </Column>
+    <div className="bookings-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="bookings-page__heading">{t('title')}</h1>
+      <p className="bookings-page__subtitle">{t('subtitle')}</p>
 
-      <Column sm={4} md={8} lg={16}>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.action')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
+      {error && (
+        <Alert type="error" showIcon title={t('error.action')} description={error} className="bookings-page__notice" />
+      )}
 
-        <div className="bookings-page__filters">
+      <div className="bookings-page__filters">
+        <Field label={t('filter.classroom')} htmlFor="f-classroom" className="bookings-page__filter">
           <Select
             id="f-classroom"
-            labelText={t('filter.classroom')}
             value={filterClassroom}
-            onChange={(e) => setFilterClassroom(e.target.value)}
-            className="bookings-page__filter"
-          >
-            <SelectItem value="" text={t('filter.allClassrooms')} />
-            {classrooms.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)} text={c.name} />
-            ))}
-          </Select>
+            onChange={(value: string) => setFilterClassroom(value)}
+            options={[
+              { value: '', label: t('filter.allClassrooms') },
+              ...classrooms.map((c) => ({ value: String(c.id), label: c.name })),
+            ]}
+          />
+        </Field>
+        <Field label={t('filter.status')} htmlFor="f-status" className="bookings-page__filter">
           <Select
             id="f-status"
-            labelText={t('filter.status')}
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bookings-page__filter"
-          >
-            <SelectItem value="" text={t('filter.allStatuses')} />
-            {STATUS_FILTER_KEYS.map((k) => (
-              <SelectItem key={k} value={k} text={t('status.' + k, { ns: 'common' })} />
-            ))}
-          </Select>
-          <TextInput
+            onChange={(value: string) => setFilterStatus(value)}
+            options={[
+              { value: '', label: t('filter.allStatuses') },
+              ...STATUS_FILTER_KEYS.map((k) => ({ value: k, label: t('status.' + k, { ns: 'common' }) })),
+            ]}
+          />
+        </Field>
+        <Field label={t('filter.from')} htmlFor="f-from" className="bookings-page__filter">
+          <DatePicker
             id="f-from"
-            type="date"
-            labelText={t('filter.from')}
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="bookings-page__filter"
+            allowClear={false}
+            value={from ? dayjs(from) : null}
+            onChange={(d) => setFrom(d ? d.format('YYYY-MM-DD') : '')}
           />
-          <TextInput
+        </Field>
+        <Field label={t('filter.to')} htmlFor="f-to" className="bookings-page__filter">
+          <DatePicker
             id="f-to"
-            type="date"
-            labelText={t('filter.to')}
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="bookings-page__filter"
+            allowClear={false}
+            value={to ? dayjs(to) : null}
+            onChange={(d) => setTo(d ? d.format('YYYY-MM-DD') : '')}
           />
-        </div>
-      </Column>
+        </Field>
+      </div>
 
-      <Column sm={4} md={8} lg={16}>
-        <DataTable rows={rows} headers={headers}>
-          {({
-            rows,
-            headers: tableHeaders,
-            getTableProps,
-            getHeaderProps,
-            getRowProps,
-            getToolbarProps,
-          }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('searchPlaceholder')} />
-                  <ExportButton
-                    path={`/api/bookings/export?${exportParams.toString()}`}
-                    fallbackName="bookings.xlsx"
-                    onError={setActionError}
-                  />
-                  <Button renderIcon={Add} size="sm" onClick={openCreate}>
-                    {t('addButton')}
-                  </Button>
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>
-                        {list.q ? t('empty.search') : t('empty.none')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const b = list.items.find((x) => String(x.id) === String(row.id))
-                      const canCancel =
-                        b &&
-                        (b.status === 'pending' || b.status === 'approved') &&
-                        (canApprove || Number(currentUser?.id) === b.userId)
-                      const canReview = canApprove && b && b.status === 'pending'
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'status') {
-                              const value = cell.value as string
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={STATUS_KIND[value] ?? 'gray'} size="sm">
-                                    {t('status.' + value, { ns: 'common', defaultValue: value })}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            if (cell.info.header === 'createdAt') {
-                              return <TableCell key={cell.id}>{formatDate(cell.value as string)}</TableCell>
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>
-                          })}
-                          <TableCell>
-                            <div className="courses-page__actions">
-                              {b && canCancel && (
-                                <Button
-                                  kind="ghost"
-                                  size="sm"
-                                  onClick={() => setCancelTarget(b)}
-                                  disabled={actingId === b.id}
-                                >
-                                  {t('action.cancel')}
-                                </Button>
-                              )}
-                              {b && canReview && (
-                                <>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={() => reviewBooking(b.id, 'approve')}
-                                    disabled={actingId === b.id}
-                                  >
-                                    {t('action.approve')}
-                                  </Button>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={() => reviewBooking(b.id, 'reject')}
-                                    disabled={actingId === b.id}
-                                  >
-                                    {t('action.reject')}
-                                  </Button>
-                                </>
-                              )}
-                              {!canCancel && !canReview && <span style={{ color: 'var(--cds-text-secondary)' }}>—</span>}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
         />
-      </Column>
+        <ExportButton
+          path={`/api/bookings/export?${exportParams.toString()}`}
+          fallbackName="bookings.xlsx"
+          onError={setActionError}
+        />
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          {t('addButton')}
+        </Button>
+      </div>
+
+      <Table<BookingView>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1220 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('form.create')}
-        primaryButtonText={t('form.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
+        title={t('form.create')}
+        okText={t('form.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        destroyOnHidden
       >
-        <div className="courses-page__form">
-          <Select
-            id="c-classroom"
-            labelText={t('form.classroom')}
-            value={createForm.classroomId}
-            onChange={(e) => setCreateForm({ ...createForm, classroomId: e.target.value })}
-          >
-            <SelectItem value="" text={t('form.selectClassroom')} />
-            {classrooms
-              .filter((c) => c.status === 'available')
-              .map((c) => (
-                <SelectItem key={c.id} value={String(c.id)} text={c.name} />
-              ))}
-          </Select>
-          <TextInput
-            id="c-date"
-            type="date"
-            labelText={t('form.date')}
-            value={createForm.date}
-            onChange={(e) => setCreateForm({ ...createForm, date: e.target.value })}
-          />
+        <div className="bookings-page__form">
+          <Field label={t('form.classroom')} htmlFor="c-classroom">
+            <Select
+              id="c-classroom"
+              placeholder={t('form.selectClassroom')}
+              value={createForm.classroomId || undefined}
+              onChange={(value: string) => setCreateForm({ ...createForm, classroomId: value })}
+              options={classrooms
+                .filter((c) => c.status === 'available')
+                .map((c) => ({ value: String(c.id), label: c.name }))}
+            />
+          </Field>
+          <Field label={t('form.date')} htmlFor="c-date">
+            <DatePicker
+              id="c-date"
+              allowClear={false}
+              value={createForm.date ? dayjs(createForm.date) : null}
+              onChange={(d) => setCreateForm({ ...createForm, date: d ? d.format('YYYY-MM-DD') : '' })}
+            />
+          </Field>
           {periods.length > 0 && (
             <>
-              <Select
-                id="c-start"
-                labelText={t('form.periodStart')}
-                value={createForm.periodStart}
-                onChange={(e) => {
-                  const start = e.target.value
-                  setCreateForm((f) => ({
-                    ...f,
-                    periodStart: start,
-                    periodEnd: Number(start) > Number(f.periodEnd) ? start : f.periodEnd,
-                  }))
-                }}
-              >
-                {periods.map((p) => (
-                  <SelectItem
-                    key={p.periodIndex}
-                    value={String(p.periodIndex)}
-                    text={t('periodOption', { period: p.periodIndex, start: p.startTime, end: p.endTime })}
-                  />
-                ))}
-              </Select>
-              <Select
-                id="c-end"
-                labelText={t('form.periodEnd')}
-                value={createForm.periodEnd}
-                onChange={(e) => setCreateForm((f) => ({ ...f, periodEnd: e.target.value }))}
-              >
-                {periods.map((p) => (
-                  <SelectItem
-                    key={p.periodIndex}
-                    value={String(p.periodIndex)}
-                    text={t('periodOption', { period: p.periodIndex, start: p.startTime, end: p.endTime })}
-                  />
-                ))}
-              </Select>
+              <Field label={t('form.periodStart')} htmlFor="c-start">
+                <Select
+                  id="c-start"
+                  value={createForm.periodStart}
+                  onChange={(start: string) =>
+                    setCreateForm((f) => ({
+                      ...f,
+                      periodStart: start,
+                      periodEnd: Number(start) > Number(f.periodEnd) ? start : f.periodEnd,
+                    }))
+                  }
+                  options={periods.map((p) => ({
+                    value: String(p.periodIndex),
+                    label: t('periodOption', { period: p.periodIndex, start: p.startTime, end: p.endTime }),
+                  }))}
+                />
+              </Field>
+              <Field label={t('form.periodEnd')} htmlFor="c-end">
+                <Select
+                  id="c-end"
+                  value={createForm.periodEnd}
+                  onChange={(periodEnd: string) => setCreateForm((f) => ({ ...f, periodEnd }))}
+                  options={periods.map((p) => ({
+                    value: String(p.periodIndex),
+                    label: t('periodOption', { period: p.periodIndex, start: p.startTime, end: p.endTime }),
+                  }))}
+                />
+              </Field>
               <p className="bookings-page__busy">{busyText}</p>
             </>
           )}
-          <TextInput
-            id="c-purpose"
-            labelText={t('form.purpose')}
-            placeholder={t('form.purposePlaceholder')}
-            value={createForm.purpose}
-            onChange={(e) => setCreateForm({ ...createForm, purpose: e.target.value })}
-          />
-          {createError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.submit')}
-              subtitle={createError}
-              lowContrast
-              hideCloseButton
+          <Field label={t('form.purpose')} htmlFor="c-purpose">
+            <Input
+              id="c-purpose"
+              placeholder={t('form.purposePlaceholder')}
+              value={createForm.purpose}
+              onChange={(e) => setCreateForm({ ...createForm, purpose: e.target.value })}
             />
-          )}
+          </Field>
+          {createError && <Alert type="error" showIcon title={t('error.submit')} description={createError} />}
         </div>
       </Modal>
 
       {/* Cancel confirm */}
       <Modal
-        danger
         open={Boolean(cancelTarget)}
-        modalHeading={t('cancelModal.title')}
-        primaryButtonText={t('cancelModal.submit')}
-        secondaryButtonText={t('cancelModal.secondary')}
-        onRequestClose={() => setCancelTarget(null)}
-        onRequestSubmit={cancelBooking}
-        primaryButtonDisabled={actingId === cancelTarget?.id}
+        title={t('cancelModal.title')}
+        okText={t('cancelModal.submit')}
+        cancelText={t('cancelModal.secondary')}
+        onCancel={() => setCancelTarget(null)}
+        onOk={cancelBooking}
+        confirmLoading={actingId === cancelTarget?.id}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
-        <p className="courses-page__confirm-text">
+        <p className="bookings-page__confirm-text">
           {t('cancelModal.confirm', {
             classroom: cancelTarget?.classroomName,
             date: cancelTarget?.date,
@@ -577,6 +497,6 @@ export default function BookingsPage() {
           })}
         </p>
       </Modal>
-    </Grid>
+    </div>
   )
 }

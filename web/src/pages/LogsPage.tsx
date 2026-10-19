@@ -9,9 +9,11 @@ import {
   Table,
   Tag,
   type TableColumnsType,
+  DatePicker
 } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
@@ -177,19 +179,19 @@ export default function LogsPage() {
 
       <div className="logs-page__filters">
         <Field label={t('filter.from')} htmlFor="logs-from">
-          <Input
+          <DatePicker
             id="logs-from"
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            allowClear={false}
+            value={from ? dayjs(from) : null}
+            onChange={(d) => setFrom(d ? d.format('YYYY-MM-DD') : '')}
           />
         </Field>
         <Field label={t('filter.to')} htmlFor="logs-to">
-          <Input
+          <DatePicker
             id="logs-to"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
+            allowClear={false}
+            value={to ? dayjs(to) : null}
+            onChange={(d) => setTo(d ? d.format('YYYY-MM-DD') : '')}
           />
         </Field>
         <Button

@@ -1,14 +1,25 @@
 {
-  "breadcrumb": { "home": "Home", "current": "Parameters" },
+  "breadcrumb": {
+    "home": "Home",
+    "current": "Parameters"
+  },
   "title": "Parameters",
   "subtitle": "Email, object storage, and AI assistant service configuration. System admins only.",
-  "error": { "action": "Action failed" },
+  "error": {
+    "action": "Action failed"
+  },
   "saveButton": "Save",
-  "placeholder": { "set": "Set — leave blank to keep", "unset": "Not set" },
-  "secret": { "show": "Show secret", "hide": "Hide secret" },
+  "placeholder": {
+    "set": "Set — leave blank to keep",
+    "unset": "Not set"
+  },
+  "secret": {
+    "show": "Show secret",
+    "hide": "Hide secret"
+  },
   "appearance": {
     "heading": "Appearance",
-    "hint": "Choose the Carbon color theme for the interface, or follow your operating system's color scheme. Saved in this browser only.",
+    "hint": "Choose the interface theme, or follow your operating system color scheme. Saved in this browser only.",
     "label": "Theme"
   },
   "mail": {
@@ -27,7 +38,9 @@
     "encryption": "Encryption",
     "encryptionSsl": "SSL",
     "encryptionStarttls": "STARTTLS",
-    "encryptionNone": "None"
+    "encryptionNone": "None",
+    "portHint": "Usually 465 for SSL and 587 for STARTTLS",
+    "passwordHint": "Leave blank to keep the stored password"
   },
   "storage": {
     "heading": "Object storage",
@@ -41,7 +54,11 @@
     "secretKey": "SecretKey",
     "useSsl": "Use HTTPS",
     "usePathStyle": "Path-style access (for MinIO and other self-hosted)",
-    "publicBaseUrl": "Public base URL (optional)"
+    "publicBaseUrl": "Public base URL (optional)",
+    "endpointHint": "No scheme prefix, e.g. cos.ap-guangzhou.myqcloud.com",
+    "publicBaseUrlHint": "Used to build publicly accessible file URLs",
+    "useSslHint": "Whether the object storage is reached over HTTPS",
+    "usePathStyleHint": "Usually required by self-hosted services such as MinIO"
   },
   "ai": {
     "heading": "AI assistant",
@@ -50,6 +67,14 @@
     "enabledLabel": "Enable AI assistant",
     "baseUrl": "Base URL",
     "model": "Model name",
-    "apiKey": "API key"
-  }
+    "apiKey": "API key",
+    "apiKeyHint": "Leave blank to keep the stored key"
+  },
+  "status": {
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
+  "unsavedHint": "Unsaved changes",
+  "savedHint": "All changes saved",
+  "readonlyBadge": "Read only"
 }

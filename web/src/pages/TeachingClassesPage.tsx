@@ -1,28 +1,15 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
-  MultiSelect,
+  Select,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-  TextInput,
-  type DataTableHeader,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -30,6 +17,7 @@ import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import { formatDate } from '../i18n/formatters'
 import type { AdminClass, Paged, TeachingClassInput, TeachingClassView } from '../types/api'
 
@@ -51,14 +39,6 @@ export default function TeachingClassesPage() {
   const { token, can } = useAuth()
   const navigate = useNavigate()
   const canManage = can('teaching_class:manage')
-
-  const headers: DataTableHeader[] = [
-    { key: 'id', header: t('field.id') },
-    { key: 'name', header: t('field.name') },
-    { key: 'members', header: t('field.members') },
-    { key: 'note', header: t('field.note') },
-    { key: 'createdAt', header: t('field.createdAt') },
-  ]
 
   const list = usePagedList<TeachingClassView>({ path: '/api/teaching-classes', token })
   const { loading } = list
@@ -179,11 +159,6 @@ export default function TeachingClassesPage() {
     }
   }
 
-  // Derive MultiSelect selection (item objects) from stored IDs so the dropdown
-  // check state stays in sync. Items come from adminClasses state, so the
-  // object references match what MultiSelect holds.
-  const selectionFor = (ids: number[]) => adminClasses.filter((a) => ids.includes(a.id))
-
   // Members column joins admin-class labels with a locale-appropriate separator
   // (zh: "、" with en: ", ") via Intl.ListFormat narrow style.
   const listFmt = new Intl.ListFormat(i18n.language, { style: 'narrow' })
@@ -191,244 +166,244 @@ export default function TeachingClassesPage() {
     const labels = (classes || []).map(classLabel)
     return labels.length ? listFmt.format(labels) : '-'
   }
-  const rows = list.items.map((tc) => ({
-    id: String(tc.id),
-    name: tc.name,
-    members: formatMembers(tc.classes),
-    note: tc.note,
-    createdAt: tc.createdAt,
-  }))
-
-  const colSpan = headers.length + (canManage ? 1 : 0)
 
   const renderMemberSelect = (form: ClassForm, setForm: Dispatch<SetStateAction<ClassForm>>) => (
-    <MultiSelect<AdminClass>
-      id="tc-classes"
-      titleText={t('form.classes')}
-      items={adminClasses}
-      itemToString={classLabel}
-      // Controlled: Carbon Modal keeps its children mounted (the content does
-      // NOT remount on open), so the edit form's preselected members only
-      // take effect via the controlled selectedItems prop.
-      selectedItems={selectionFor(form.classIds)}
-      onChange={({ selectedItems }) => setForm({ ...form, classIds: (selectedItems ?? []).map((i) => i.id) })}
-      label={t('classesPicker.label')}
-      disabled={adminClasses.length === 0}
-    />
+    // Controlled: the edit form's preselected members only take effect via the
+    // controlled value prop (the modal does not remount its content on open).
+    <Field label={t('form.classes')} htmlFor="tc-classes">
+      <Select
+        id="tc-classes"
+        mode="multiple"
+        allowClear
+        value={form.classIds}
+        options={adminClasses.map((a) => ({ value: a.id, label: classLabel(a) }))}
+        onChange={(classIds: number[]) => setForm({ ...form, classIds })}
+        placeholder={t('classesPicker.label')}
+        disabled={adminClasses.length === 0}
+      />
+    </Field>
   )
 
+  const columns: TableColumnsType<TeachingClassView> = [
+    { title: t('field.id'), dataIndex: 'id', width: 72 },
+    {
+      title: t('field.name'),
+      dataIndex: 'name',
+      width: 200,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('field.members'),
+      key: 'members',
+      ellipsis: true,
+      render: (_, tc) => formatMembers(tc.classes),
+    },
+    {
+      title: t('field.note'),
+      dataIndex: 'note',
+      ellipsis: true,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('field.createdAt'),
+      dataIndex: 'createdAt',
+      width: 170,
+      render: (value: string) => formatDate(value),
+    },
+  ]
+
+  if (canManage) {
+    columns.push({
+      title: t('field.actions'),
+      key: 'actions',
+      width: 108,
+      fixed: 'right',
+      render: (_, tc) => (
+        <div className="teaching-classes-page__actions">
+          <Button
+            type="text"
+            size="small"
+            aria-label={t('action.edit', { ns: 'common' })}
+            icon={<EditOutlined />}
+            onClick={() => openEdit(tc)}
+          />
+          <Button
+            type="text"
+            size="small"
+            danger
+            aria-label={t('action.delete', { ns: 'common' })}
+            icon={<DeleteOutlined />}
+            onClick={() => openDelete(tc)}
+          />
+        </div>
+      ),
+    })
+  }
+
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('title')}</h1>
-        <p className="courses-page__subtitle">{t('subtitle')}</p>
-        {adminClasses.length === 0 && (
-          <InlineNotification
-            kind="info"
-            title={t('info.title')}
-            subtitle={t('info.subtitle')}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-      </Column>
-
-      <Column sm={4} md={8} lg={16}>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-
-        <DataTable rows={rows} headers={headers}>
-          {({ rows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('searchPlaceholder')} />
-                  <ExportButton
-                    path="/api/teaching-classes/export"
-                    fallbackName="teaching-classes.xlsx"
-                    onError={setExportError}
-                  />
-                  {canManage && (
-                    <Button renderIcon={Add} size="sm" onClick={() => setCreateOpen(true)}>
-                      {t('addButton')}
-                    </Button>
-                  )}
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    {canManage && <TableHeader>{t('field.actions')}</TableHeader>}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>
-                        {list.q ? t('empty.search') : t('empty.none')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const tc = list.items.find((x) => String(x.id) === String(row.id))
-                      if (!tc) return null
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'createdAt') {
-                              return <TableCell key={cell.id}>{formatDate(cell.value as string)}</TableCell>
-                            }
-                            return <TableCell key={cell.id}>{(cell.value as string) || '-'}</TableCell>
-                          })}
-                          {canManage && (
-                            <TableCell>
-                              <div className="courses-page__actions">
-                                <Button
-                                  kind="ghost"
-                                  size="sm"
-                                  hasIconOnly
-                                  renderIcon={Edit}
-                                  iconDescription={t('action.edit', { ns: 'common' })}
-                                  onClick={() => openEdit(tc)}
-                                />
-                                <Button
-                                  kind="ghost"
-                                  size="sm"
-                                  hasIconOnly
-                                  renderIcon={TrashCan}
-                                  iconDescription={t('action.delete', { ns: 'common' })}
-                                  onClick={() => openDelete(tc)}
-                                />
-                              </div>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+    <div className="teaching-classes-page">
+      <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="teaching-classes-page__heading">{t('title')}</h1>
+      <p className="teaching-classes-page__subtitle">{t('subtitle')}</p>
+      {adminClasses.length === 0 && (
+        <Alert
+          type="info"
+          showIcon
+          title={t('info.title')}
+          description={t('info.subtitle')}
+          className="teaching-classes-page__notice"
         />
-      </Column>
+      )}
+
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('error.load')}
+          description={error}
+          className="teaching-classes-page__notice"
+        />
+      )}
+
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
+        />
+        <ExportButton
+          path="/api/teaching-classes/export"
+          fallbackName="teaching-classes.xlsx"
+          onError={setExportError}
+        />
+        {canManage && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            {t('addButton')}
+          </Button>
+        )}
+      </div>
+
+      <Table<TeachingClassView>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1000 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('modal.create')}
-        primaryButtonText={t('modal.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
+        title={t('modal.create')}
+        okText={t('modal.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        destroyOnHidden
       >
-        <div className="courses-page__form">
-          <TextInput
-            id="tc-name"
-            labelText={t('form.name')}
-            placeholder={t('placeholder.name')}
-            value={createForm.name}
-            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-          />
+        <div className="teaching-classes-page__form">
+          <Field label={t('form.name')} htmlFor="tc-name">
+            <Input
+              id="tc-name"
+              placeholder={t('placeholder.name')}
+              value={createForm.name}
+              onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+            />
+          </Field>
           {renderMemberSelect(createForm, setCreateForm)}
-          <TextInput
-            id="tc-note"
-            labelText={t('form.note')}
-            value={createForm.note}
-            onChange={(e) => setCreateForm({ ...createForm, note: e.target.value })}
-          />
-          {createError && (
-            <InlineNotification kind="error" title={t('error.create')} subtitle={createError} lowContrast hideCloseButton />
-          )}
+          <Field label={t('form.note')} htmlFor="tc-note">
+            <Input
+              id="tc-note"
+              value={createForm.note}
+              onChange={(e) => setCreateForm({ ...createForm, note: e.target.value })}
+            />
+          </Field>
+          {createError && <Alert type="error" showIcon title={t('error.create')} description={createError} />}
         </div>
       </Modal>
 
       {/* Edit */}
       <Modal
         open={Boolean(editTarget)}
-        modalHeading={t('modal.edit', { name: editTarget?.name ?? '' })}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditTarget(null)}
-        onRequestSubmit={handleEdit}
-        primaryButtonDisabled={editing}
+        title={t('modal.edit', { name: editTarget?.name ?? '' })}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditTarget(null)}
+        onOk={handleEdit}
+        confirmLoading={editing}
+        destroyOnHidden
       >
-        <div className="courses-page__form">
-          <TextInput
-            id="tc-edit-name"
-            labelText={t('form.name')}
-            value={editForm.name}
-            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-          />
+        <div className="teaching-classes-page__form">
+          <Field label={t('form.name')} htmlFor="tc-edit-name">
+            <Input
+              id="tc-edit-name"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+            />
+          </Field>
           {renderMemberSelect(editForm, setEditForm)}
-          <TextInput
-            id="tc-edit-note"
-            labelText={t('form.note')}
-            value={editForm.note}
-            onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
-          />
-          {editError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={editError} lowContrast hideCloseButton />
-          )}
+          <Field label={t('form.note')} htmlFor="tc-edit-note">
+            <Input
+              id="tc-edit-note"
+              value={editForm.note}
+              onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
+            />
+          </Field>
+          {editError && <Alert type="error" showIcon title={t('error.save')} description={editError} />}
         </div>
       </Modal>
 
       {/* Delete */}
       <Modal
-        danger
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
-        <p className="courses-page__confirm-text">
+        <p className="teaching-classes-page__confirm-text">
           {t('deleteConfirm', { name: deleteTarget?.name })}
         </p>
-        {deleteError && (
-          <InlineNotification kind="error" title={t('error.delete')} subtitle={deleteError} lowContrast hideCloseButton />
-        )}
+        {deleteError && <Alert type="error" showIcon title={t('error.delete')} description={deleteError} />}
       </Modal>
-    </Grid>
+    </div>
   )
 }

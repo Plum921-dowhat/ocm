@@ -1,27 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
-  Modal,
-  Select,
-  SelectItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-  type DataTableHeader,
-} from '@carbon/react'
+import { Alert, Breadcrumb, Button, Input, Modal, Select, Table, type TableColumnsType } from 'antd'
 import { QRCodeSVG } from 'qrcode.react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -30,6 +8,7 @@ import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import type { Checkin, CheckinRecord } from '../types/api'
 import { CheckinStatusTag, STATUS_KEYS, StatusTag, formatDateTime } from './attendanceUi'
 
@@ -40,15 +19,6 @@ export default function AttendanceDetailPage() {
   const { token, can } = useAuth()
   const canManage = can('attendance:manage')
 
-  const headers: DataTableHeader[] = [
-    { key: 'displayName', header: t('detail.field.name') },
-    { key: 'studentNo', header: t('detail.field.studentNo') },
-    { key: 'adminClass', header: t('detail.field.adminClass') },
-    { key: 'status', header: t('detail.field.status') },
-    { key: 'checkedAt', header: t('detail.field.checkedAt') },
-    { key: 'inRoster', header: t('detail.field.inRoster') },
-  ]
-
   const [checkin, setCheckin] = useState<Checkin | null>(null)
   const [detailError, setDetailError] = useState('')
   const [now, setNow] = useState(() => new Date())
@@ -56,14 +26,6 @@ export default function AttendanceDetailPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const list = usePagedList<CheckinRecord>({ path: `/api/checkins/${id}/records`, token, extraParams: { status: statusFilter } })
   const { loading } = list
-
-  // Carbon DataTable requires a unique string `id` on each row; checkin records
-  // are keyed by userId (no `id` field from the API), so derive it here. The
-  // generated CheckinRecord type has no `id`, which is exactly what locks this
-  // derivation in: without it the row key is undefined, the find() below
-  // misses, and r.displayName throws — white-screening the page once any
-  // record renders.
-  const tableRows = list.items.map((r) => ({ ...r, id: String(r.userId) }))
 
   const [editTarget, setEditTarget] = useState<CheckinRecord | null>(null)
   const [editStatus, setEditStatus] = useState('')
@@ -157,239 +119,242 @@ export default function AttendanceDetailPage() {
     return `${mm}:${ss}`
   }
 
+  const columns: TableColumnsType<CheckinRecord> = [
+    { title: t('detail.field.name'), dataIndex: 'displayName', width: 140 },
+    {
+      title: t('detail.field.studentNo'),
+      dataIndex: 'studentNo',
+      width: 130,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('detail.field.adminClass'),
+      dataIndex: 'adminClass',
+      width: 160,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('detail.field.status'),
+      dataIndex: 'status',
+      width: 110,
+      render: (value: string) => <StatusTag status={value} />,
+    },
+    {
+      title: t('detail.field.checkedAt'),
+      dataIndex: 'checkedAt',
+      width: 180,
+      render: (value: string | undefined) => (value ? formatDateTime(value) : '-'),
+    },
+    {
+      title: t('detail.field.inRoster'),
+      dataIndex: 'inRoster',
+      width: 110,
+      render: (value: boolean) => (value ? t('detail.inRosterYes') : t('detail.inRosterNo')),
+    },
+  ]
+
+  if (canManage) {
+    columns.push({
+      title: t('detail.field.actions'),
+      key: 'actions',
+      width: 100,
+      fixed: 'right',
+      render: (_, r) => (
+        <Button type="text" size="small" onClick={() => openEdit(r)}>
+          {t('detail.action.modify')}
+        </Button>
+      ),
+    })
+  }
+
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem
-            href="/attendance"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/attendance')
-            }}
-          >
-            {t('breadcrumb.attendance')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{checkin?.title ?? t('detail.titleFallback')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{checkin?.title ?? t('detail.titleFallback')}</h1>
-        <p className="courses-page__subtitle">
-          {checkin && (
-            <>
-              {t('detail.codePrefix')} {checkin.code} ·{' '}
-              {checkin.courseName
-                ? t('detail.courseAndClass', { course: checkin.courseName, teachingClass: checkin.teachingClassName })
-                : t('detail.standalone')}
-              {checkin.sessionText ? ` · ${checkin.sessionText}` : ''} ·{' '}
-              {t('detail.startedAt', { time: formatDateTime(checkin.startsAt) })}
-            </>
-          )}
-        </p>
-      </Column>
-
-      <Column sm={4} md={8} lg={16}>
-        {detailError && (
-          <InlineNotification
-            kind="error"
-            title={t('detail.error.load')}
-            subtitle={detailError}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-        {actionError && (
-          <InlineNotification
-            kind="error"
-            title={t('detail.error.action')}
-            subtitle={actionError}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-
+    <div className="courses-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          {
+            title: (
+              <a
+                href="/attendance"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/attendance')
+                }}
+              >
+                {t('breadcrumb.attendance')}
+              </a>
+            ),
+          },
+          { title: checkin?.title ?? t('detail.titleFallback') },
+        ]}
+      />
+      <h1 className="courses-page__heading">{checkin?.title ?? t('detail.titleFallback')}</h1>
+      <p className="courses-page__subtitle">
         {checkin && (
-          <div className="attendance-detail">
-            {/* QR + status panel */}
-            <div className="attendance-detail__panel">
-              <div className="attendance-detail__qr">
-                <QRCodeSVG value={checkin.code} size={280} />
-                <div className="attendance-detail__code">{checkin.code}</div>
-              </div>
-              <div className="attendance-detail__side">
-                <CheckinStatusTag status={checkin.status} />
-                {checkin.status === 'active' && (
-                  <p className="attendance-detail__countdown">
-                    {expired
-                      ? t('detail.elapsed')
-                      : checkin.expiresAt
-                        ? t('detail.remaining', { time: remainingText() })
-                        : t('detail.manualMode')}
-                  </p>
-                )}
-                {checkin.lateMinutes > 0 && <p>{t('detail.lateThreshold', { minutes: checkin.lateMinutes })}</p>}
-                {canManage && checkin.status === 'active' && (
-                  <Button kind="danger--ghost" size="sm" onClick={handleClose}>
-                    {t('detail.closeBtn')}
-                  </Button>
-                )}
-                <p className="attendance-detail__hint">{t('detail.hint')}</p>
-              </div>
-            </div>
+          <>
+            {t('detail.codePrefix')} {checkin.code} ·{' '}
+            {checkin.courseName
+              ? t('detail.courseAndClass', { course: checkin.courseName, teachingClass: checkin.teachingClassName })
+              : t('detail.standalone')}
+            {checkin.sessionText ? ` · ${checkin.sessionText}` : ''} ·{' '}
+            {t('detail.startedAt', { time: formatDateTime(checkin.startsAt) })}
+          </>
+        )}
+      </p>
 
-            {/* Live counts */}
-            <div className="attendance-detail__stats">
-              {statItems.map((s) => (
-                <div key={s.label} className="attendance-detail__stat">
-                  <div className="attendance-detail__stat-value">{s.value}</div>
-                  <div className="attendance-detail__stat-label">{s.label}</div>
-                </div>
-              ))}
+      {detailError && (
+        <Alert type="error" showIcon title={t('detail.error.load')} description={detailError} className="courses-page__notice" />
+      )}
+      {actionError && (
+        <Alert type="error" showIcon title={t('detail.error.action')} description={actionError} className="courses-page__notice" />
+      )}
+
+      {checkin && (
+        <div className="attendance-detail">
+          {/* QR + status panel */}
+          <div className="attendance-detail__panel">
+            <div className="attendance-detail__qr">
+              <QRCodeSVG value={checkin.code} size={280} />
+              <div className="attendance-detail__code">{checkin.code}</div>
             </div>
-            {checkin.counts.expected === 0 && checkin.offeringId > 0 && (
-              <InlineNotification
-                kind="warning"
-                title={t('detail.warning.zeroExpectedTitle')}
-                subtitle={t('detail.warning.noRosterSubtitle')}
-                lowContrast
-                hideCloseButton
-                className="courses-page__notice"
-              />
-            )}
+            <div className="attendance-detail__side">
+              <CheckinStatusTag status={checkin.status} />
+              {checkin.status === 'active' && (
+                <p className="attendance-detail__countdown">
+                  {expired
+                    ? t('detail.elapsed')
+                    : checkin.expiresAt
+                      ? t('detail.remaining', { time: remainingText() })
+                      : t('detail.manualMode')}
+                </p>
+              )}
+              {checkin.lateMinutes > 0 && <p>{t('detail.lateThreshold', { minutes: checkin.lateMinutes })}</p>}
+              {canManage && checkin.status === 'active' && (
+                <Button type="text" size="small" danger onClick={handleClose}>
+                  {t('detail.closeBtn')}
+                </Button>
+              )}
+              <p className="attendance-detail__hint">{t('detail.hint')}</p>
+            </div>
           </div>
-        )}
 
-        {list.error && (
-          <InlineNotification
-            kind="error"
-            title={t('detail.error.recordLoad')}
-            subtitle={list.error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-
-        <DataTable rows={tableRows} headers={headers}>
-          {({ rows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-            <TableContainer title={t('detail.table.title')} description={t('detail.table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('detail.searchPlaceholder')} />
-                  <Select
-                    id="rec-status"
-                    labelText={t('detail.field.status')}
-                    hideLabel
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <SelectItem value="" text={t('list.filter.allStatuses')} />
-                    <SelectItem value="present" text={t('status.present', { ns: 'common' })} />
-                    <SelectItem value="late" text={t('status.late', { ns: 'common' })} />
-                    <SelectItem value="absent" text={t('status.absent', { ns: 'common' })} />
-                    <SelectItem value="leave" text={t('status.leave', { ns: 'common' })} />
-                  </Select>
-                  <ExportButton path={`/api/checkins/${id}/export`} fallbackName={`checkin-${id}.xlsx`} onError={setActionError} />
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    {canManage && <TableHeader>{t('detail.field.actions')}</TableHeader>}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + (canManage ? 1 : 0)}>{t('detail.empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + (canManage ? 1 : 0)}>
-                        {statusFilter ? t('detail.empty.filtered') : t('detail.empty.none')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const r = list.items.find((x) => String(x.userId) === String(row.id))
-                      if (!r) return null
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          <TableCell>{r.displayName}</TableCell>
-                          <TableCell>{r.studentNo || '-'}</TableCell>
-                          <TableCell>{r.adminClass || '-'}</TableCell>
-                          <TableCell>
-                            <StatusTag status={r.status} />
-                          </TableCell>
-                          <TableCell>{r.checkedAt ? formatDateTime(r.checkedAt) : '-'}</TableCell>
-                          <TableCell>{r.inRoster ? t('detail.inRosterYes') : t('detail.inRosterNo')}</TableCell>
-                          {canManage && (
-                            <TableCell>
-                              <Button kind="ghost" size="sm" onClick={() => openEdit(r)}>
-                                {t('detail.action.modify')}
-                              </Button>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+          {/* Live counts */}
+          <div className="attendance-detail__stats">
+            {statItems.map((s) => (
+              <div key={s.label} className="attendance-detail__stat">
+                <div className="attendance-detail__stat-value">{s.value}</div>
+                <div className="attendance-detail__stat-label">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {checkin.counts.expected === 0 && checkin.offeringId > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              title={t('detail.warning.zeroExpectedTitle')}
+              description={t('detail.warning.noRosterSubtitle')}
+              className="courses-page__notice"
+            />
           )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+        </div>
+      )}
+
+      {list.error && (
+        <Alert type="error" showIcon title={t('detail.error.recordLoad')} description={list.error} className="courses-page__notice" />
+      )}
+
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('detail.table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('detail.table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
+          placeholder={t('detail.searchPlaceholder')}
         />
-      </Column>
+        <Select
+          aria-label={t('detail.field.status')}
+          className="ds-table-toolbar__filter"
+          value={statusFilter}
+          onChange={(value: string) => setStatusFilter(value)}
+          options={[
+            { value: '', label: t('list.filter.allStatuses') },
+            { value: 'present', label: t('status.present', { ns: 'common' }) },
+            { value: 'late', label: t('status.late', { ns: 'common' }) },
+            { value: 'absent', label: t('status.absent', { ns: 'common' }) },
+            { value: 'leave', label: t('status.leave', { ns: 'common' }) },
+          ]}
+        />
+        <ExportButton path={`/api/checkins/${id}/export`} fallbackName={`checkin-${id}.xlsx`} onError={setActionError} />
+      </div>
+
+      {/* Checkin records are keyed by userId (the API returns no `id`), so the
+          table's row key is userId. */}
+      <Table<CheckinRecord>
+        rowKey="userId"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1000 }}
+        locale={{
+          emptyText: loading
+            ? t('detail.empty.loading')
+            : statusFilter
+              ? t('detail.empty.filtered')
+              : t('detail.empty.none'),
+        }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Modify record */}
       <Modal
         open={Boolean(editTarget)}
-        modalHeading={t('detail.modal.edit', { name: editTarget?.displayName ?? '' })}
-        primaryButtonText={t('detail.modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditTarget(null)}
-        onRequestSubmit={handleSave}
-        primaryButtonDisabled={saving}
+        title={t('detail.modal.edit', { name: editTarget?.displayName ?? '' })}
+        okText={t('detail.modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditTarget(null)}
+        onOk={handleSave}
+        confirmLoading={saving}
+        destroyOnHidden
       >
         <div className="courses-page__form">
-          <Select
-            id="edit-status"
-            labelText={t('detail.modal.statusLabel')}
-            value={editStatus}
-            onChange={(e) => setEditStatus(e.target.value)}
-          >
-            {STATUS_KEYS.map((value) => (
-              <SelectItem key={value} value={value} text={t('status.' + value, { ns: 'common' })} />
-            ))}
-          </Select>
+          <Field label={t('detail.modal.statusLabel')} htmlFor="edit-status">
+            <Select
+              id="edit-status"
+              value={editStatus}
+              onChange={(value: string) => setEditStatus(value)}
+              options={STATUS_KEYS.map((value) => ({
+                value,
+                label: t('status.' + value, { ns: 'common' }),
+              }))}
+            />
+          </Field>
           <p className="courses-page__subtitle">{t('detail.modal.hint')}</p>
-          {editError && (
-            <InlineNotification kind="error" title={t('detail.error.save')} subtitle={editError} lowContrast hideCloseButton />
-          )}
+          {editError && <Alert type="error" showIcon title={t('detail.error.save')} description={editError} />}
         </div>
       </Modal>
-    </Grid>
+    </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Button, type ButtonProps } from '@carbon/react'
-import { Download } from '@carbon/icons-react'
+import { Button } from 'antd'
+import { DownloadOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiDownload } from '../auth/api'
@@ -9,7 +9,7 @@ export interface ExportButtonProps {
   path: string
   fallbackName?: string
   label?: string
-  size?: ButtonProps<'button'>['size']
+  size?: 'small' | 'middle' | 'large'
   onError?: (message: string) => void
   disabled?: boolean
   className?: string
@@ -25,7 +25,7 @@ export default function ExportButton({
   path,
   fallbackName = 'export.xlsx',
   label,
-  size = 'sm',
+  size = 'middle',
   onError,
   disabled = false,
   className,
@@ -49,12 +49,12 @@ export default function ExportButton({
 
   return (
     <Button
-      kind="ghost"
-      renderIcon={Download}
+      icon={<DownloadOutlined />}
       size={size}
       className={className}
       onClick={handleExport}
-      disabled={disabled || exporting}
+      loading={exporting}
+      disabled={disabled}
     >
       {exporting ? t('action.exporting') : displayLabel}
     </Button>

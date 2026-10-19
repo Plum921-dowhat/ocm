@@ -1,43 +1,19 @@
 import { useEffect, useState } from 'react'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
-  Modal,
-  Select,
-  SelectItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-  Tag,
-  TextInput,
-  type DataTableHeader,
-  type TagProps,
-} from '@carbon/react'
+import { Alert, Breadcrumb, Button, Input, Modal, Select, Table, Tag, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import { formatDateTime } from '../i18n/formatters'
 import type { Classroom, IotDevice, Paged } from '../types/api'
 
-const STATUS_KIND: Record<string, TagProps<'div'>['type']> = {
+const STATUS_COLOR: Record<string, string> = {
   pending: 'blue',
   online: 'green',
-  offline: 'gray',
+  offline: 'default',
 }
 
 export default function IotDevicesPage() {
@@ -45,16 +21,6 @@ export default function IotDevicesPage() {
   const { token, can } = useAuth()
   const navigate = useNavigate()
   const canManage = can('iot:manage')
-
-  const headers: DataTableHeader[] = [
-    { key: 'name', header: t('field.name') },
-    { key: 'externalId', header: t('field.externalId') },
-    { key: 'category', header: t('field.category') },
-    { key: 'sourceId', header: t('field.sourceId') },
-    { key: 'classroom', header: t('field.classroom') },
-    { key: 'status', header: t('field.status') },
-    { key: 'lastSeenAt', header: t('field.lastSeenAt') },
-  ]
 
   const [filterStatus, setFilterStatus] = useState('')
   const list = usePagedList<IotDevice>({
@@ -134,204 +100,196 @@ export default function IotDevicesPage() {
     }
   }
 
-  const rows = list.items.map((d) => ({
-    id: String(d.id),
-    name: d.name || '—',
-    externalId: d.externalId,
-    category: d.category,
-    sourceId: d.sourceId,
-    classroom: classroomLabel(d.classroomId),
-    status: d.status,
-    lastSeenAt: d.lastSeenAt ? formatDateTime(d.lastSeenAt) : '—',
-  }))
-
-  const colSpan = headers.length + 1
+  const columns: TableColumnsType<IotDevice> = [
+    {
+      title: t('field.name'),
+      dataIndex: 'name',
+      width: 170,
+      render: (value: string) => value || '—',
+    },
+    { title: t('field.externalId'), dataIndex: 'externalId', width: 170 },
+    { title: t('field.category'), dataIndex: 'category', width: 130 },
+    { title: t('field.sourceId'), dataIndex: 'sourceId', width: 130 },
+    {
+      title: t('field.classroom'),
+      key: 'classroom',
+      width: 200,
+      render: (_, d) => classroomLabel(d.classroomId),
+    },
+    {
+      title: t('field.status'),
+      dataIndex: 'status',
+      width: 110,
+      render: (value: string) => (
+        <Tag color={STATUS_COLOR[value] ?? 'default'}>{t('status.' + value, { defaultValue: value })}</Tag>
+      ),
+    },
+    {
+      title: t('field.lastSeenAt'),
+      dataIndex: 'lastSeenAt',
+      width: 180,
+      render: (value: string | undefined) => (value ? formatDateTime(value) : '—'),
+    },
+    {
+      title: t('field.actions'),
+      key: 'actions',
+      width: 200,
+      fixed: 'right',
+      render: (_, d) => (
+        <div className="classrooms-page__actions">
+          <Button type="text" size="small" onClick={() => navigate(`/iot/${d.id}`)}>
+            {t('action.detail')}
+          </Button>
+          {d.status === 'pending' && canManage && (
+            <Button type="text" size="small" onClick={() => openApprove(d)}>
+              {t('action.approve')}
+            </Button>
+          )}
+          {canManage && (
+            <Button type="text" size="small" danger onClick={() => setDeleteTarget(d)}>
+              {t('action.delete', { ns: 'common' })}
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ]
 
   return (
-    <Grid fullWidth className="classrooms-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="classrooms-page__heading">{t('title')}</h1>
-        <p className="classrooms-page__subtitle">{t('subtitle')}</p>
-      </Column>
+    <div className="classrooms-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="classrooms-page__heading">{t('title')}</h1>
+      <p className="classrooms-page__subtitle">{t('subtitle')}</p>
 
-      <Column sm={4} md={8} lg={16}>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.action')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="classrooms-page__notice"
-          />
-        )}
+      {error && (
+        <Alert type="error" showIcon title={t('error.action')} description={error} className="classrooms-page__notice" />
+      )}
 
-        <div className="bookings-page__filters">
+      <div className="bookings-page__filters">
+        <Field label={t('filter.status')} htmlFor="iot-status" className="bookings-page__filter">
           <Select
             id="iot-status"
-            labelText={t('filter.status')}
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bookings-page__filter"
-          >
-            <SelectItem value="" text={t('filter.allStatuses')} />
-            <SelectItem value="pending" text={t('status.pending')} />
-            <SelectItem value="online" text={t('status.online')} />
-            <SelectItem value="offline" text={t('status.offline')} />
-          </Select>
-        </div>
-      </Column>
+            onChange={(value: string) => setFilterStatus(value)}
+            options={[
+              { value: '', label: t('filter.allStatuses') },
+              { value: 'pending', label: t('status.pending') },
+              { value: 'online', label: t('status.online') },
+              { value: 'offline', label: t('status.offline') },
+            ]}
+          />
+        </Field>
+      </div>
 
-      <Column sm={4} md={8} lg={16}>
-        <DataTable rows={rows} headers={headers}>
-          {({ rows: tableRows, headers: renderedHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('table.searchPlaceholder')} />
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {renderedHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : tableRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{list.q ? t('empty.search') : t('empty.none')}</TableCell>
-                    </TableRow>
-                  ) : (
-                    tableRows.map((row) => {
-                      const d = list.items.find((x) => String(x.id) === String(row.id))
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'status') {
-                              const value = cell.value as string
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={STATUS_KIND[value] ?? 'gray'} size="sm">
-                                    {t('status.' + value, { defaultValue: value })}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>
-                          })}
-                          <TableCell>
-                            <div className="classrooms-page__actions">
-                              <Button kind="ghost" size="sm" onClick={() => navigate(`/iot/${d?.id}`)}>
-                                {t('action.detail')}
-                              </Button>
-                              {d && d.status === 'pending' && canManage && (
-                                <Button kind="ghost" size="sm" onClick={() => openApprove(d)}>
-                                  {t('action.approve')}
-                                </Button>
-                              )}
-                              {d && canManage && (
-                                <Button kind="ghost" size="sm" onClick={() => setDeleteTarget(d)}>
-                                  {t('action.delete', { ns: 'common' })}
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
+          placeholder={t('table.searchPlaceholder')}
         />
-      </Column>
+      </div>
+
+      <Table<IotDevice>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1200 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Approve dialog */}
       <Modal
         open={Boolean(approveTarget)}
-        modalHeading={t('modal.approve')}
-        primaryButtonText={t('modal.approveSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setApproveTarget(null)}
-        onRequestSubmit={handleApprove}
-        primaryButtonDisabled={approving}
+        title={t('modal.approve')}
+        okText={t('modal.approveSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setApproveTarget(null)}
+        onOk={handleApprove}
+        confirmLoading={approving}
+        destroyOnHidden
       >
         <div className="classrooms-page__form">
           <p className="classrooms-page__confirm-text">{t('modal.approveHint')}</p>
-          <TextInput
-            id="iot-approve-name"
-            labelText={t('modal.name')}
-            value={approveForm.name}
-            onChange={(e) => setApproveForm({ ...approveForm, name: e.target.value })}
-          />
-          <Select
-            id="iot-approve-classroom"
-            labelText={t('modal.classroom')}
-            value={approveForm.classroomId}
-            onChange={(e) => setApproveForm({ ...approveForm, classroomId: e.target.value })}
-          >
-            <SelectItem value="" text={t('validation.classroomRequired')} />
-            {classrooms.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)} text={c.building ? `${c.building} ${c.name}` : c.name} />
-            ))}
-          </Select>
-          <TextInput
-            id="iot-approve-category"
-            labelText={t('modal.category')}
-            value={approveForm.category}
-            onChange={(e) => setApproveForm({ ...approveForm, category: e.target.value })}
-          />
-          {approveError && (
-            <InlineNotification kind="error" title={t('error.action')} subtitle={approveError} lowContrast hideCloseButton />
-          )}
+          <Field label={t('modal.name')} htmlFor="iot-approve-name">
+            <Input
+              id="iot-approve-name"
+              value={approveForm.name}
+              onChange={(e) => setApproveForm({ ...approveForm, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('modal.classroom')} htmlFor="iot-approve-classroom">
+            <Select
+              id="iot-approve-classroom"
+              value={approveForm.classroomId}
+              onChange={(value: string) => setApproveForm({ ...approveForm, classroomId: value })}
+              options={[
+                { value: '', label: t('validation.classroomRequired') },
+                ...classrooms.map((c) => ({
+                  value: String(c.id),
+                  label: c.building ? `${c.building} ${c.name}` : c.name,
+                })),
+              ]}
+            />
+          </Field>
+          <Field label={t('modal.category')} htmlFor="iot-approve-category">
+            <Input
+              id="iot-approve-category"
+              value={approveForm.category}
+              onChange={(e) => setApproveForm({ ...approveForm, category: e.target.value })}
+            />
+          </Field>
+          {approveError && <Alert type="error" showIcon title={t('error.action')} description={approveError} />}
         </div>
       </Modal>
 
       {/* Delete dialog */}
       <Modal
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
-        danger
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
         <p className="classrooms-page__confirm-text">
           {t('modal.deleteLine', { name: deleteTarget?.name || deleteTarget?.externalId })}
         </p>
       </Modal>
-    </Grid>
+    </div>
   )
 }
