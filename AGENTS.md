@@ -37,7 +37,7 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 - 设计 token 在 `app.wxss`(`page` 上的 CSS 变量,如 `--color-primary: #2B5FF6`)。
 - 顶部导航统一用 `components/app-navbar`(包一层 TDesign `t-navbar`):`app.json` 全局 `navigationStyle: "custom"`,`app-navbar` 用 `fixed="{{false}}"` 走文档流,状态栏高度、胶囊宽度、导航栏高度由 `t-navbar` 读 `getMenuButtonBoundingClientRect` 自动算,返回箭头按页面栈自动判断。页面只需在 `.page` 第一行写 `<app-navbar title="教室管理" />`,**不要**再手算 `statusBarHeight`、加 `padding-top` 或 `placeholder`。`page.json` 的 `navigationBarTitleText` 仅作文档兜底,运行时不生效;动态标题(先例 `pages/observations-form`)把文案放进页面 data 传给 `app-navbar`。
 - 底部 tabBar 用微信原生:原生 tabBar **不能按权限隐藏某一项**,无权限入口由页内空态兜底(先例 `pages/ai`)。
-- **CI 门禁**:`.github/workflows/miniapp.yml` 在 `miniapp/**` 或校验脚本变更时跑两步——`scripts/check-miniapp-navbar.py`(每页必须有 `<app-navbar>`,标题须与 `page.json` 的 `navigationBarTitleText` 一致,登录页允许空标题)和 `tsc --noEmit`(TypeScript 按版本号内联锁定,未进 devDependencies)。本地改完页面先跑一遍校验脚本,别等 CI。
+- **CI 门禁**:`.github/workflows/miniapp.yml` 在 `miniapp/**` 或 workflow 自身变更时跑两步——`miniapp/scripts/check-navbar.py`(每页必须有 `<app-navbar>`,标题须与 `page.json` 的 `navigationBarTitleText` 一致,登录页允许空标题)和 `tsc --noEmit`(TypeScript 按版本号内联锁定,未进 devDependencies)。脚本按自身位置定位小程序目录,从任意 cwd 都能跑;本地改完页面先跑一遍,别等 CI。`miniapp/scripts/` 已在 `project.config.json` 的 `packOptions.ignore` 中排除,不会进入代码包。
 
 ## 后端(Go)
 

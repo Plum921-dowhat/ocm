@@ -4,12 +4,10 @@ on:
   push:
     paths:
       - 'miniapp/**'
-      - 'scripts/check-miniapp-navbar.py'
       - '.github/workflows/miniapp.yml'
   pull_request:
     paths:
       - 'miniapp/**'
-      - 'scripts/check-miniapp-navbar.py'
       - '.github/workflows/miniapp.yml'
   workflow_dispatch:
 
@@ -33,7 +31,7 @@ jobs:
       # 每个页面必须有 <app-navbar>，且标题与 page.json 的 navigationBarTitleText 一致。
       # custom 导航下漏写组件不会报错、只会让页面顶到状态栏，必须靠静态检查兜住。
       - name: Navbar convention
-        run: python3 scripts/check-miniapp-navbar.py
+        run: python3 miniapp/scripts/check-navbar.py
 
       - uses: actions/setup-node@v4
         with:
