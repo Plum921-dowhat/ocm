@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="作息设置" />
   <view class="search-row">
     <input
       class="search-input"

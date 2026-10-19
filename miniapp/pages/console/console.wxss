@@ -1,7 +1,8 @@
 .page {
   display: flex;
   flex-direction: column;
-  /* 原生导航栏 + 原生 tabBar 都在页面视口之外，100vh 已扣掉两者 */
+  /* 自定义导航栏走 .page 内部文档流（app-navbar 自带状态栏留白与高度），
+     这里只剩原生 tabBar 在视口之外被 100vh 扣除 */
   height: 100vh;
   box-sizing: border-box;
   background: var(--color-bg);

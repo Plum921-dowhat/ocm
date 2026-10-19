@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="{{navTitle}}" />
   <scroll-view scroll-y class="form-scroll">
     <view wx:if="{{error}}" class="banner">
       <text class="banner-text">{{error}}</text>

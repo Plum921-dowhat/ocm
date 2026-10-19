@@ -1,0 +1,18 @@
+:host {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* 返回按钮：占满导航栏左侧高度，保证 44px 级别的点击热区 */
+.app-navbar__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding-right: 8rpx;
+  box-sizing: border-box;
+}
+
+.app-navbar__back--active {
+  opacity: 0.6;
+}

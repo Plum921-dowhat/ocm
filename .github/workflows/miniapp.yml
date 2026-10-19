@@ -1,0 +1,52 @@
+name: Miniapp
+
+on:
+  push:
+    paths:
+      - 'miniapp/**'
+      - 'scripts/check-miniapp-navbar.py'
+      - '.github/workflows/miniapp.yml'
+  pull_request:
+    paths:
+      - 'miniapp/**'
+      - 'scripts/check-miniapp-navbar.py'
+      - '.github/workflows/miniapp.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: miniapp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Navbar & types
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 导航约定（纯 Python，无依赖，放在最前面，失败快）：
+      # 每个页面必须有 <app-navbar>，且标题与 page.json 的 navigationBarTitleText 一致。
+      # custom 导航下漏写组件不会报错、只会让页面顶到状态栏，必须靠静态检查兜住。
+      - name: Navbar convention
+        run: python3 scripts/check-miniapp-navbar.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: miniapp/package-lock.json
+
+      - name: Install dependencies
+        working-directory: miniapp
+        run: npm ci
+
+      # 类型门禁：小程序没有打包器，tsc 是唯一能挡住类型回归的关卡。
+      # TypeScript 暂未写入 devDependencies，此处按版本号内联锁定。
+      - name: Type check
+        working-directory: miniapp
+        run: npx --yes --package typescript@5.9.2 tsc --noEmit

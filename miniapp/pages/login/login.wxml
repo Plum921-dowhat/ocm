@@ -1,5 +1,6 @@
 <view class="page">
 
+  <app-navbar class="app-navbar" title="" back="{{false}}" />
   <block wx:if="{{autoChecking}}">
     <view class="checking">
       <view class="checking-logo">

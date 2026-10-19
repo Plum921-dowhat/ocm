@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="参数配置" />
   <scroll-view scroll-y class="list-scroll">
     <empty-state wx:if="{{!allowed}}" text="仅系统管理员可访问此页面"></empty-state>
 

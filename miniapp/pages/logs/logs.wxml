@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="审计日志" />
   <!-- 筛选 -->
   <view class="filters">
     <view class="filter-row">

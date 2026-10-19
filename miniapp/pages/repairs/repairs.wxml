@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="教室报修" />
   <!-- 状态筛选 -->
   <view class="filters">
     <scroll-view scroll-x class="chips-scroll" enable-flex>

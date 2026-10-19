@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="我的签到" />
   <scroll-view scroll-y class="list-scroll" bindscrolltolower="onReachBottom">
     <empty-state wx:if="{{!allowed}}" text="无签到权限，请联系管理员"></empty-state>
     <block wx:else>

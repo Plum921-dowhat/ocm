@@ -6,7 +6,7 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 
 - **默认 WebView 渲染**。不在 app.json 设置全局 `"renderer": "skyline"`。
 - **Skyline 仅在性能关键页按页开启**:长列表、重滚动、worklet 动画等场景。开启方式:在该页 page.json 加 `"renderer": "skyline"`(`componentFramework: glass-easel` 已在 app.json 全局设置,继承即可)。
-- 开 Skyline 的页面**必须用 `scroll-view` 承载滚动内容**(Skyline 无页面级滚动),并保持 `navigationStyle: custom`。
+- 开 Skyline 的页面**必须用 `scroll-view` 承载滚动内容**(Skyline 无页面级滚动),并要求 `navigationStyle: custom` —— 本项目全站已是 custom,所以按页开 Skyline 时**不需要再补导航层**,顶部继续用 `app-navbar`。
 - 低版本微信/PC 端会自动 fallback 到 WebView,按页开启是安全的。
 - **当前所有页面均为 WebView**(mock 数据,无性能压力)。index/ai 接入真实大列表后,再按页评估开启 Skyline。
 - 选型背景见 `agents/TDesign-Skyline-兼容性调查报告.md`:TDesign 对 Skyline 支持是部分的,Cascader/Calendar 在 Skyline 下不可用,故默认 WebView 以获得完整组件库。
@@ -35,7 +35,9 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 
 - TypeScript + glass-easel。`app.js` 为纯 JS(require)以避免 app.ts/app.js 冲突;`utils/`、`config/` 为 .ts(ES 导出,编译为 CommonJS)。
 - 设计 token 在 `app.wxss`(`page` 上的 CSS 变量,如 `--color-primary: #2B5FF6`)。
-- 导航栏与 tabBar 走微信原生(`app.json` 不设 `navigationStyle`):页面标题写在各自 `page.json` 的 `navigationBarTitleText`,需要动态标题时用 `wx.setNavigationBarTitle`(先例 `pages/observations-form`)。原生 tabBar 的代价是**不能按权限隐藏某一项**,无权限入口由页内空态兜底(先例 `pages/ai`)。
+- 顶部导航统一用 `components/app-navbar`(包一层 TDesign `t-navbar`):`app.json` 全局 `navigationStyle: "custom"`,`app-navbar` 用 `fixed="{{false}}"` 走文档流,状态栏高度、胶囊宽度、导航栏高度由 `t-navbar` 读 `getMenuButtonBoundingClientRect` 自动算,返回箭头按页面栈自动判断。页面只需在 `.page` 第一行写 `<app-navbar title="教室管理" />`,**不要**再手算 `statusBarHeight`、加 `padding-top` 或 `placeholder`。`page.json` 的 `navigationBarTitleText` 仅作文档兜底,运行时不生效;动态标题(先例 `pages/observations-form`)把文案放进页面 data 传给 `app-navbar`。
+- 底部 tabBar 用微信原生:原生 tabBar **不能按权限隐藏某一项**,无权限入口由页内空态兜底(先例 `pages/ai`)。
+- **CI 门禁**:`.github/workflows/miniapp.yml` 在 `miniapp/**` 或校验脚本变更时跑两步——`scripts/check-miniapp-navbar.py`(每页必须有 `<app-navbar>`,标题须与 `page.json` 的 `navigationBarTitleText` 一致,登录页允许空标题)和 `tsc --noEmit`(TypeScript 按版本号内联锁定,未进 devDependencies)。本地改完页面先跑一遍校验脚本,别等 CI。
 
 ## 后端(Go)
 

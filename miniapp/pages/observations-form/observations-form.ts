@@ -22,6 +22,8 @@ function indicatorScoreGroups(ind: any): { key: string; lines: string[] }[] {
 Page({
   data: {
     mode: 'create' as 'create' | 'edit',
+    // 顶部导航标题（自定义导航，模板里读这个字段）
+    navTitle: '新建评课',
     id: 0,
     loading: true,
     saving: false,
@@ -69,9 +71,8 @@ Page({
     if (!ok) return
     const id = options && options.id ? Number(options.id) : 0
     const mode: 'create' | 'edit' = id ? 'edit' : 'create'
-    // 原生导航栏标题需按模式切换（模板里写不了动态标题）
-    wx.setNavigationBarTitle({ title: mode === 'edit' ? '编辑评课' : '新建评课' })
-    this.setData({ mode, id })
+    // 自定义导航栏：标题由 app-navbar 读 navTitle 渲染
+    this.setData({ mode, id, navTitle: mode === 'edit' ? '编辑评课' : '新建评课' })
     try {
       const [sch, off, clr] = await Promise.all([
         request<{ rating_options: RatingOption[]; templates: any[] }>({ path: '/api/observations/templates' }),

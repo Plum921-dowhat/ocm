@@ -29,7 +29,11 @@
     "navigationBarTitleText": "OCM",
     "navigationBarBackgroundColor": "#FFFFFF",
     "navigationBarTextStyle": "black",
+    "navigationStyle": "custom",
     "backgroundColor": "#F5F7FA"
+  },
+  "usingComponents": {
+    "app-navbar": "/components/app-navbar/app-navbar"
   },
   "tabBar": {
     "color": "#8F959E",

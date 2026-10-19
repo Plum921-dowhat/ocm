@@ -1,5 +1,6 @@
 <view class="page">
 
+  <app-navbar class="app-navbar" title="首页" />
   <scroll-view type="custom" scroll-y class="scroll-content">
 
     <!-- 搜索栏 -->

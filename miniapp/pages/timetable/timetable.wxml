@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="教室课表" />
   <!-- 教室选择 + 周导航 -->
   <view class="toolbar">
     <picker mode="selector" range="{{classroomOptions}}" value="{{classroomIndex}}" bindchange="onClassroomChange">

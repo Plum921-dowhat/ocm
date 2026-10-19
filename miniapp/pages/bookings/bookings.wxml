@@ -1,4 +1,5 @@
 <view class="page">
+  <app-navbar class="app-navbar" title="教室预约" />
   <!-- 筛选区 -->
   <view class="filters">
     <scroll-view scroll-x class="chips-scroll" enable-flex>

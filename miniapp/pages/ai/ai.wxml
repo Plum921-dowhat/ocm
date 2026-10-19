@@ -1,5 +1,6 @@
 <view class="page">
 
+  <app-navbar class="app-navbar" title="AI助手" />
   <scroll-view type="custom" scroll-y class="scroll-content" scroll-into-view="{{scrollInto}}" scroll-with-animation>
     <!-- 无权限 -->
     <empty-state wx:if="{{!canUse}}" text="没有使用权限，如需使用请联系管理员授权"></empty-state>
