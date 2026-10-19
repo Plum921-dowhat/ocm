@@ -6,7 +6,8 @@
     "typeLabel": "导入类型",
     "button": "上传导入",
     "uploading": "上传中…",
-    "error": "上传失败"
+    "error": "上传失败",
+    "chooseFile": "选择文件"
   },
   "schemaIntroTail": " 表头（按列名识别，顺序无关）：",
   "unnamed": "(未命名)",

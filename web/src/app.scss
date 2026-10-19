@@ -394,11 +394,20 @@ body {
 
 // --- Dashboard -------------------------------------------------------------
 .dashboard {
-  padding-block: $spacing-07 $spacing-09;
-  // One vertical rhythm for every band (KPI row, charts, panels, quick
-  // start): the grid row-gap replaces per-column margins, which silently
-  // missed any band added later.
-  row-gap: $spacing-07;
+  display: block;
+  padding: $spacing-07;
+  max-inline-size: 1600px;
+}
+
+// Vertical rhythm: the bands are direct children, so one rule spaces them
+// without relying on a grid row-gap the Ant Design Row/Col does not have.
+.dashboard > .ant-row,
+.dashboard__kpis {
+  margin-block-start: $spacing-07;
+}
+
+.dashboard__error {
+  margin-block-start: $spacing-05;
 }
 
 .dashboard__heading {
@@ -422,11 +431,21 @@ body {
 }
 
 .dashboard__kpi {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: $spacing-05;
-  min-block-size: 7.5rem;
+  block-size: 100%;
+
+  .ant-card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: $spacing-05;
+    min-block-size: 7.5rem;
+  }
+}
+
+.dashboard__kpi-icon {
+  display: inline-flex;
+  font-size: 20px;
+  color: var(--cds-text-secondary);
 }
 
 .dashboard__kpi--alert {
@@ -468,10 +487,13 @@ body {
 // Section panels (today's sessions, to-do center, recent activity). Vertical
 // spacing between bands comes from the .dashboard grid row-gap.
 .dashboard__panel {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-04;
   block-size: 100%;
+
+  .ant-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-04;
+  }
 }
 
 .dashboard__panel-head {
@@ -586,9 +608,10 @@ body {
   padding-block: $spacing-03;
 
   // Fixed-width period tag column so course names align vertically.
-  .cds--tag {
+  .ant-tag {
     flex: 0 0 5.5rem;
     justify-content: center;
+    margin-inline-end: 0;
   }
 }
 
@@ -693,6 +716,10 @@ body {
 
 .dashboard__quicklink {
   min-block-size: 7rem;
+
+  .ant-card-body {
+    padding: $spacing-05;
+  }
 }
 
 .dashboard__quicklink-title {
@@ -2020,5 +2047,60 @@ body {
 
 .logs-page__settings-label {
   font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+// Pages migrated off the Carbon grid own their own page padding.
+.logs-page,
+.groups-page {
+  padding: 24px;
+}
+
+.ds-table-toolbar__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.ds-table-toolbar__hint {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+// Import page (migrated): the upload row was previously unstyled because its
+// class names had no rules; it now shares the Ant Design control height.
+.imports-page {
+  padding: 24px;
+}
+
+.imports-page__upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-block: 8px 16px;
+}
+
+.imports-page__type-select {
+  inline-size: 240px;
+}
+
+.imports-page__upload-err {
+  margin-block-end: 16px;
+}
+
+.imports-page__schema {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  color: var(--cds-text-secondary);
+}
+
+.imports-page__note {
+  margin: 0 0 24px;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.imports-page__muted {
   color: var(--cds-text-secondary);
 }
