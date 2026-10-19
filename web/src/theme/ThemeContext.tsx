@@ -9,16 +9,33 @@ import {
   type ReactNode,
 } from 'react'
 
-// The app supports every Carbon theme plus a "system" preference that follows
-// the OS color scheme: light resolves to g10 (the app's historical look) and
-// dark to g100. Themes are applied as a `cds--<name>` class on <html>; the
-// prebuilt @carbon/styles CSS ships all four theme token sets under those
-// classes, so switching never touches the build.
+// The app is migrating from Carbon to Ant Design. Both design systems need a
+// colour mode, so this context owns the single source of truth and exposes:
+//
+//   - `preference`  what the user picked (system | a concrete theme name)
+//   - `theme`       the resolved Carbon theme, applied as a `cds--<name>`
+//                   class on <html> (still needed by the pages that have not
+//                   been migrated off @carbon/react yet)
+//   - `colorScheme` the same decision reduced to light/dark, consumed by the
+//                   Ant Design ConfigProvider (see theme/AntdProvider.tsx)
+//
+// `white`/`g10` are both light and `g90`/`g100` are both dark, so the two
+// systems never disagree. Carbon's prebuilt CSS ships all four token sets
+// under the cds-- classes, so switching never touches the build.
 export const THEME_NAMES = ['white', 'g10', 'g90', 'g100'] as const
 export type ThemeName = (typeof THEME_NAMES)[number]
 
 export const THEME_PREFERENCES = ['system', ...THEME_NAMES] as const
 export type ThemePreference = (typeof THEME_PREFERENCES)[number]
+
+/** Colour mode shared by Carbon (via cds-- classes) and Ant Design. */
+export type ColorScheme = 'light' | 'dark'
+
+const DARK_THEMES: ReadonlySet<ThemeName> = new Set<ThemeName>(['g90', 'g100'])
+
+export function resolveColorScheme(theme: ThemeName): ColorScheme {
+  return DARK_THEMES.has(theme) ? 'dark' : 'light'
+}
 
 const STORAGE_KEY = 'ocm.theme'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
@@ -33,6 +50,8 @@ export interface ThemeContextValue {
   preference: ThemePreference
   /** The concrete Carbon theme currently applied to <html>. */
   theme: ThemeName
+  /** Light/dark projection of `theme`, used by the Ant Design provider. */
+  colorScheme: ColorScheme
   setPreference: (preference: ThemePreference) => void
 }
 
@@ -65,6 +84,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const theme = resolveTheme(preference, systemDark)
+  const colorScheme = resolveColorScheme(theme)
 
   // Apply the resolved theme class to <html> before paint (layout effect, so
   // the header and the content area never show different themes for a frame)
@@ -85,8 +105,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setPreference = useCallback((pref: ThemePreference) => setPreferenceState(pref), [])
 
   const value = useMemo(
-    () => ({ preference, theme, setPreference }),
-    [preference, theme, setPreference],
+    () => ({ preference, theme, colorScheme, setPreference }),
+    [preference, theme, colorScheme, setPreference],
   )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

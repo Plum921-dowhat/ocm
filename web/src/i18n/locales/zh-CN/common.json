@@ -104,6 +104,8 @@
   },
   "theme": {
     "system": "跟随系统",
+    "light": "浅色",
+    "dark": "深色",
     "white": "浅色（White）",
     "g10": "浅色（Gray 10）",
     "g90": "深色（Gray 90）",
@@ -112,5 +114,8 @@
   "password": {
     "show": "显示密码",
     "hide": "隐藏密码"
+  },
+  "pagination": {
+    "total": "共 {{total}} 条"
   }
 }

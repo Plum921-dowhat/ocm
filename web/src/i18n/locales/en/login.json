@@ -18,9 +18,18 @@
   "passwordPlaceholder": "Enter your password",
   "showPassword": "Show password",
   "hidePassword": "Hide password",
-  "errorTitle": "Your ID or password was entered incorrectly.",
   "loggingIn": "Logging in…",
   "logIn": "Log in",
   "forgotPassword": "Forgot password?",
-  "docs": "Docs"
+  "docs": "Docs",
+  "error": {
+    "title": "Sign-in failed",
+    "credentials": "Incorrect ID or password",
+    "credentialsHint": "Check your ID and password and try again.",
+    "badRequest": "The ID or password format is invalid",
+    "rateLimited": "Too many sign-in attempts. Try again later.",
+    "server": "The server could not process the sign-in ({{status}}). Try again later.",
+    "requestFailed": "The sign-in request failed ({{status}}). Try again later.",
+    "network": "Cannot reach the server. Check your connection and try again."
+  }
 }
