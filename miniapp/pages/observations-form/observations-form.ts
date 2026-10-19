@@ -69,6 +69,8 @@ Page({
     if (!ok) return
     const id = options && options.id ? Number(options.id) : 0
     const mode: 'create' | 'edit' = id ? 'edit' : 'create'
+    // 原生导航栏标题需按模式切换（模板里写不了动态标题）
+    wx.setNavigationBarTitle({ title: mode === 'edit' ? '编辑评课' : '新建评课' })
     this.setData({ mode, id })
     try {
       const [sch, off, clr] = await Promise.all([

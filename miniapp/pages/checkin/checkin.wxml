@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="签到中心" left-arrow fixed placeholder />
-
   <scroll-view scroll-y class="page-scroll">
     <empty-state wx:if="{{!allowed}}" text="无签到权限，请联系管理员"></empty-state>
     <block wx:else>

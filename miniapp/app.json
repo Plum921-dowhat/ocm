@@ -27,7 +27,9 @@
   ],
   "window": {
     "navigationBarTitleText": "OCM",
-    "navigationStyle": "custom"
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F5F7FA"
   },
   "tabBar": {
     "color": "#8F959E",

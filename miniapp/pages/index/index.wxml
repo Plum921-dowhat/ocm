@@ -1,13 +1,4 @@
-<view class="page" style="padding-top: {{statusBarHeight}}px">
-
-  <!-- 自定义导航栏 -->
-  <view class="nav-bar">
-    <view class="nav-left">
-      <image class="nav-scan-icon" src="/assets/icons/nav_scan.png" mode="aspectFit" />
-    </view>
-    <text class="nav-title">首页</text>
-    <view class="nav-right"></view>
-  </view>
+<view class="page">
 
   <scroll-view type="custom" scroll-y class="scroll-content">
 

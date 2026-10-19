@@ -1,9 +1,7 @@
 import { bindAccount, silentLogin, getToken } from '../../utils/auth'
-import { getNavInfo } from '../../utils/nav'
 
 Page({
   data: {
-    statusBarHeight: getNavInfo().statusBarHeight,
     username: '',
     password: '',
     showPassword: false,

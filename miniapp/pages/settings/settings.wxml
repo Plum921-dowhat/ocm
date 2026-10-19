@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="参数配置" left-arrow fixed placeholder />
-
   <scroll-view scroll-y class="list-scroll">
     <empty-state wx:if="{{!allowed}}" text="仅系统管理员可访问此页面"></empty-state>
 

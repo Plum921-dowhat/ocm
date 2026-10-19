@@ -1,6 +1,6 @@
 {
+  "navigationBarTitleText": "参数配置",
   "usingComponents": {
-    "t-navbar": "tdesign-miniprogram/navbar/navbar",
     "empty-state": "/components/empty-state/empty-state"
   }
 }

@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="教室报修" left-arrow fixed placeholder />
-
   <!-- 状态筛选 -->
   <view class="filters">
     <scroll-view scroll-x class="chips-scroll" enable-flex>

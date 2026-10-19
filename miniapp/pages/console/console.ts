@@ -1,4 +1,3 @@
-import { getNavInfo } from '../../utils/nav'
 import { getUser } from '../../utils/auth'
 import { can, canAny } from '../../utils/perms'
 
@@ -48,7 +47,6 @@ const SECTION_ORDER: { group: string; title: string }[] = [
 
 Page({
   data: {
-    statusBarHeight: getNavInfo().statusBarHeight,
     sections: [] as HubSection[],
     hasAny: false
   },

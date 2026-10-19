@@ -2,39 +2,10 @@
 .page {
   display: flex;
   flex-direction: column;
-  /* 原生 tabBar:100vh 已扣除 tabBar(含安全区),不再需要手工让位 */
+  /* 原生导航栏 + 原生 tabBar 都在页面视口之外，100vh 已扣掉两者 */
   height: 100vh;
-  /* 与内联 padding-top 一起按 border-box 计,否则根节点会高出视口 */
   box-sizing: border-box;
   background: var(--color-bg);
-}
-
-/* ── 导航栏 ── */
-.nav-bar {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  height: 88rpx;
-  padding: 0 var(--space-md);
-  background: #FFFFFF;
-}
-
-.nav-left, .nav-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  width: 120rpx;
-}
-
-.nav-left {
-  justify-content: flex-start;
-}
-
-.nav-title {
-  font-size: var(--font-lg);
-  font-weight: 700;
-  color: var(--color-text);
 }
 
 /* ── 滚动区 ── */

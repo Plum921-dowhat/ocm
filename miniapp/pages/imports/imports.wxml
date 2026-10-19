@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="数据导入" left-arrow fixed placeholder />
-
   <scroll-view scroll-y class="list-scroll" bindscrolltolower="onReachBottom">
     <!-- 上传区 -->
     <view class="upload-card">

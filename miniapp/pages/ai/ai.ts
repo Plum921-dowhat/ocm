@@ -1,11 +1,7 @@
-import { getNavInfo } from '../../utils/nav'
 import { ensureAuth } from '../../utils/auth'
 import { can } from '../../utils/perms'
 import { streamChat, StreamHandle } from '../../utils/sse'
 import { request } from '../../utils/request'
-
-// 首帧渲染即需正确高度（避免 100vh 在部分机型初始计算偏差），故在模块级同步取值。
-const nav = getNavInfo()
 
 interface ToolState {
   name: string
@@ -54,7 +50,6 @@ const suggestions = [
 
 Page({
   data: {
-    statusBarHeight: nav.statusBarHeight,
     canUse: false,
     messages: [] as Message[],
     inputValue: '',

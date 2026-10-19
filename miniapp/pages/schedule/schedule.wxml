@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="作息设置" left-arrow fixed placeholder />
-
   <view class="search-row">
     <input
       class="search-input"

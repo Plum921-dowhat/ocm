@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="课程管理" left-arrow fixed placeholder />
-
   <view class="tab-row">
     <t-segmented options="{{tabs}}" value="{{tab}}" bind:change="onTabChange" />
   </view>

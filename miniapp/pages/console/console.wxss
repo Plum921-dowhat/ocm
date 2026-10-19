@@ -1,25 +1,10 @@
 .page {
   display: flex;
   flex-direction: column;
+  /* 原生导航栏 + 原生 tabBar 都在页面视口之外，100vh 已扣掉两者 */
   height: 100vh;
-  /* 自定义 tabBar:100vh 已含 tabBar 区域,与内联 padding-top 一起按 border-box 计,
-     否则根节点高出视口、底部内容被 tabBar 遮住 */
   box-sizing: border-box;
   background: var(--color-bg);
-}
-
-.nav-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 88rpx;
-  background: #FFFFFF;
-}
-
-.nav-title {
-  font-size: var(--font-lg);
-  font-weight: 700;
-  color: var(--color-text);
 }
 
 .scroll-content {

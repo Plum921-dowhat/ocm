@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="行政班管理" left-arrow fixed placeholder />
-
   <view class="search-row">
     <input
       class="search-input"

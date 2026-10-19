@@ -1,11 +1,4 @@
-<view class="page" style="padding-top: {{statusBarHeight}}px">
-
-  <!-- 自定义导航栏 -->
-  <view class="nav-bar">
-    <view class="nav-left"></view>
-    <text class="nav-title">我的</text>
-    <view class="nav-right"></view>
-  </view>
+<view class="page">
 
   <scroll-view type="custom" scroll-y class="scroll-content">
 

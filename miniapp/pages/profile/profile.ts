@@ -1,5 +1,4 @@
 import { getUser, unbind, AppUser } from '../../utils/auth'
-import { getNavInfo } from '../../utils/nav'
 import { can } from '../../utils/perms'
 import { request } from '../../utils/request'
 
@@ -13,7 +12,6 @@ function roleLabelOf(u: AppUser): string {
 
 Page({
   data: {
-    statusBarHeight: getNavInfo().statusBarHeight,
     cacheSize: '12.5 MB',
     displayName: '未登录',
     roleLabel: '',

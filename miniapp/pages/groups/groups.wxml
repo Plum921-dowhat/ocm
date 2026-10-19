@@ -1,6 +1,4 @@
 <view class="page">
-  <t-navbar title="用户组管理" left-arrow fixed placeholder />
-
   <view wx:if="{{error}}" class="banner">
     <text class="banner-text">{{error}}</text>
     <view class="banner-retry" bindtap="onRetry">重试</view>
