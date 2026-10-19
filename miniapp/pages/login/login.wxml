@@ -3,7 +3,7 @@
   <block wx:if="{{autoChecking}}">
     <view class="checking">
       <view class="checking-logo">
-        <text class="checking-logo-text">OCM</text>
+        <image class="logo-img" src="{{brand.logoImage}}" mode="aspectFit" />
       </view>
       <text class="checking-text">正在登录…</text>
     </view>
@@ -15,9 +15,9 @@
       <!-- 品牌区 -->
       <view class="brand">
         <view class="logo">
-          <text class="logo-text">OCM</text>
+          <image class="logo-img" src="{{brand.logoImage}}" mode="aspectFit" />
         </view>
-        <text class="brand-title">智慧教室管理</text>
+        <text class="brand-title">{{brand.titleCloud}}</text>
         <text class="brand-sub">登录后将绑定当前微信号，后续进入无需重复输入</text>
       </view>
 
@@ -63,7 +63,7 @@
     </scroll-view>
 
     <view class="footer">
-      <text class="footer-text">OCM · 智慧教室管理系统</text>
+      <text class="footer-text">{{brand.name}} · {{brand.systemName}}</text>
     </view>
   </block>
 

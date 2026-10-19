@@ -1,7 +1,9 @@
 import { bindAccount, silentLogin, getToken } from '../../utils/auth'
+import { brand } from '../../config/brand'
 
 Page({
   data: {
+    brand,
     username: '',
     password: '',
     showPassword: false,

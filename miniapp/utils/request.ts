@@ -80,9 +80,20 @@ function callTransport(
         fail,
       })
     } else {
+      // wx.request 的类型联合里没有 PATCH（运行时可发，后端 PATCH
+      // /api/users/{id}/password 依赖它），类型声明尚未跟上，这里收窄一次。
+      const method = (opts.method || 'GET') as unknown as
+        | 'GET'
+        | 'POST'
+        | 'PUT'
+        | 'DELETE'
+        | 'OPTIONS'
+        | 'HEAD'
+        | 'TRACE'
+        | 'CONNECT'
       wx.request({
         url: apiConfig.baseUrl + fullPath,
-        method: opts.method || 'GET',
+        method,
         header,
         data: opts.data,
         timeout,

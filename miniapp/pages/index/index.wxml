@@ -45,7 +45,7 @@
         </view>
         <view class="notice-content">
           <text class="notice-title">系统通知</text>
-          <text class="notice-desc">OCM v1.0 全新智慧教室管理体验已上线</text>
+          <text class="notice-desc">{{brand.name}} v1.0 全新{{brand.titleCloud}}体验已上线</text>
         </view>
         <view class="notice-arrow"></view>
       </view>

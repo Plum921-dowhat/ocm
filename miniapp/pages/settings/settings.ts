@@ -1,6 +1,7 @@
 import { ensureAuth } from '../../utils/auth'
 import { can } from '../../utils/perms'
 import { request } from '../../utils/request'
+import { brand } from '../../config/brand'
 
 /**
  * 系统参数配置(仅 '*' 管理员)。三节表单与 web 端 SettingsPage 一致:
@@ -58,6 +59,7 @@ const ENCRYPTION_LABELS = ['SSL', 'STARTTLS', '无']
 
 Page({
   data: {
+    brand,
     allowed: false,
     loaded: false,
     pageError: '',

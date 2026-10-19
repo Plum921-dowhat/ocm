@@ -33,7 +33,7 @@
         </view>
         <view class="field">
           <text class="field-label">发件人名称</text>
-          <input class="field-input" value="{{mail.fromName}}" placeholder="OCM 通知" placeholder-class="field-placeholder" data-field="fromName" bindinput="onMailInput" />
+          <input class="field-input" value="{{mail.fromName}}" placeholder="{{brand.name}} 通知" placeholder-class="field-placeholder" data-field="fromName" bindinput="onMailInput" />
         </view>
         <view class="field">
           <text class="field-label">发件人邮箱</text>

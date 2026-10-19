@@ -1,4 +1,5 @@
 import { ensureAuth } from '../../utils/auth'
+import { brand } from '../../config/brand'
 import { can } from '../../utils/perms'
 import { streamChat, StreamHandle } from '../../utils/sse'
 import { request } from '../../utils/request'
@@ -50,6 +51,7 @@ const suggestions = [
 
 Page({
   data: {
+    brand,
     canUse: false,
     messages: [] as Message[],
     inputValue: '',

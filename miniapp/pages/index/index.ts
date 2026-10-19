@@ -1,4 +1,5 @@
 import { ensureAuth, getUser } from '../../utils/auth'
+import { brand } from '../../config/brand'
 import { can, canAny } from '../../utils/perms'
 import { request } from '../../utils/request'
 import { today, periodLabel } from '../../utils/format'
@@ -15,6 +16,7 @@ interface Booking {
 
 Page({
   data: {
+    brand,
     // 快入口:url 非空且权限通过则跳转,否则保留 toast
     quickItems: [
       { type: '课表查询', icon: '/assets/icons/quick_calendar.png', url: '/pages/timetable/timetable', gate: 'course:read' },

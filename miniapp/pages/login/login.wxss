@@ -17,18 +17,7 @@
 .checking-logo {
   width: 96rpx;
   height: 96rpx;
-  border-radius: 24rpx;
-  background: var(--color-primary-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   margin-bottom: 24rpx;
-}
-.checking-logo-text {
-  color: var(--color-primary);
-  font-size: 36rpx;
-  font-weight: 700;
-  letter-spacing: 2rpx;
 }
 .checking-text {
   font-size: var(--font-sm);
@@ -49,18 +38,12 @@
 .logo {
   width: 96rpx;
   height: 96rpx;
-  border-radius: 24rpx;
-  background: var(--color-primary-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   margin-bottom: 32rpx;
 }
-.logo-text {
-  color: var(--color-primary);
-  font-size: 36rpx;
-  font-weight: 700;
-  letter-spacing: 2rpx;
+/* 品牌 logo：唯一方案，路径来自 config/brand.ts 的 logoImage */
+.logo-img {
+  width: 96rpx;
+  height: 96rpx;
 }
 .brand-title {
   font-size: 48rpx;
