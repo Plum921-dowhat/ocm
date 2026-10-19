@@ -35,7 +35,7 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 
 - TypeScript + glass-easel。`app.js` 为纯 JS(require)以避免 app.ts/app.js 冲突;`utils/`、`config/` 为 .ts(ES 导出,编译为 CommonJS)。
 - 设计 token 在 `app.wxss`(`page` 上的 CSS 变量,如 `--color-primary: #2B5FF6`)。
-- `navigationStyle: custom`,每页手写自定义导航栏(未来可统一为 t-navbar)。
+- 导航栏与 tabBar 走微信原生(`app.json` 不设 `navigationStyle`):页面标题写在各自 `page.json` 的 `navigationBarTitleText`,需要动态标题时用 `wx.setNavigationBarTitle`(先例 `pages/observations-form`)。原生 tabBar 的代价是**不能按权限隐藏某一项**,无权限入口由页内空态兜底(先例 `pages/ai`)。
 
 ## 后端(Go)
 
