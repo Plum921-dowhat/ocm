@@ -1,10 +1,10 @@
 # OCM — An Open-source Classroom Management System 智慧教室管理系统
 
 An integrated smart-classroom system: courses, timetables, classroom bookings, attendance, lesson 
-observation and IoT devices — one Go backend, a React (Carbon) web console and a WeChat mini-
+observation and IoT devices — one Go backend, a React (Ant Design) web console and a WeChat mini-
 program, plus a device-side IoT SDK and an optional monitoring stack.
 
-课堂管理一体的智慧教室系统:课程 / 课表 / 教室预约 / 考勤 / 听课评课 / 物联网设备,三端一体——**Go 后端** + **Web 控制台**(React + Carbon) + **微信小程序**,外加 IoT 设备侧 SDK 与可选监控栈。
+课堂管理一体的智慧教室系统:课程 / 课表 / 教室预约 / 考勤 / 听课评课 / 物联网设备,三端一体——**Go 后端** + **Web 控制台**(React + Ant Design) + **微信小程序**,外加 IoT 设备侧 SDK 与可选监控栈。
 
 **Full documentation (deployment, contracts, per-client guides): [docs.zyang4418.cn](https://docs.zyang4418.cn)**
 
@@ -30,7 +30,7 @@ Web 控制台 http://localhost:5173 ,默认账号 `admin` / `admin123`(开发默
 | Directory | Contents |
 |---|---|
 | `backend/` | Go backend (`net/http` ServeMux + PostgreSQL 17, idempotent migrations) |
-| `web/` | Web console (React 19 + Vite + Carbon, TypeScript strict) |
+| `web/` | Web console (React 19 + Vite + Ant Design, TypeScript strict) |
 | `miniapp/` | WeChat mini-program (glass-easel + TDesign, WebView by default) |
 | `iot/` | Device-side SDK & simulator (second Go module; MQTT contract in `iot/spec/spec.md`) |
 | `docs/` | Documentation site (Docusaurus) |
@@ -40,7 +40,7 @@ Web 控制台 http://localhost:5173 ,默认账号 `admin` / `admin123`(开发默
 | 目录 | 内容 |
 |---|---|
 | `backend/` | Go 后端(`net/http` ServeMux + PostgreSQL 17,幂等迁移) |
-| `web/` | Web 控制台(React 19 + Vite + Carbon,TypeScript strict) |
+| `web/` | Web 控制台(React 19 + Vite + Ant Design,TypeScript strict) |
 | `miniapp/` | 微信小程序(glass-easel + TDesign,默认 WebView) |
 | `iot/` | 设备侧 SDK 与模拟器(第二个 Go module,MQTT 契约见 `iot/spec/spec.md`) |
 | `docs/` | 文档站(Docusaurus) |

@@ -7,9 +7,9 @@ import { useTheme } from './ThemeContext'
 import { buildAntdTheme } from './antd'
 
 // AntdProvider supplies the Ant Design theme and locale. It sits inside
-// ThemeProvider (colour mode) and LanguageProvider (locale) so a single
-// preference drives both design systems during the migration: Carbon still
-// reads its cds-- class from <html>, Ant Design reads this config.
+// ThemeProvider (colour mode) and LanguageProvider (locale), so one preference
+// drives both halves of the theming: the `cds--*` class on <html> that app.scss
+// keys its token bridge off, and this ConfigProvider.
 //
 // <AntdApp> gives components access to the context-aware message/modal/
 // notification APIs (Ant Design v6 no longer encourages the static methods).

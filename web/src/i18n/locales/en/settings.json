@@ -75,6 +75,8 @@
     "disabled": "Disabled"
   },
   "unsavedHint": "Unsaved changes",
+  "blockedHint": "Still required: {{fields}}",
+  "listSeparator": ", ",
   "savedHint": "All changes saved",
   "readonlyBadge": "Read only"
 }

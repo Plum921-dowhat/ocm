@@ -8,7 +8,7 @@ title: 项目结构
 ocm/
 ├─ backend/            Go 后端(module ocm-backend;internal/ 按领域分包,职责见各包 doc comment)
 ├─ miniapp/            微信小程序(glass-easel + TDesign;页面清单以 app.json 为准)
-├─ web/                Web 控制台(React 19 + Vite + Carbon,TypeScript strict)
+├─ web/                Web 控制台(React 19 + Vite + Ant Design,TypeScript strict)
 ├─ iot/                设备侧 SDK(module ocm-iot:mqttc 连接层、sim 模拟器、spec 契约)——后端刻意不 import 它
 ├─ docs/               Docusaurus 文档站(docs-only,根 / → 快速开始)
 ├─ deploy/             部署配置(mosquitto、observability),配 overlay 使用
@@ -31,7 +31,7 @@ TypeScript + glass-easel + TDesign,**默认 WebView** 渲染;顶部导航统一 
 
 ## `web/` — Web 控制台
 
-React 19 + Vite + IBM Carbon,**TypeScript strict 全量**,API 类型走生成的 `src/types/api.d.ts`(由 OpenAPI 生成)。下游定制经 `src/config/*.override.tsx` 文件注入缝,见 `AGENTS.md` 定制层一节。详见 [Web 端](/guide/web)。
+React 19 + Vite + Ant Design,**TypeScript strict 全量**,API 类型走生成的 `src/types/api.d.ts`(由 OpenAPI 生成)。下游定制经 `src/config/*.override.tsx` 文件注入缝,见 `AGENTS.md` 定制层一节。详见 [Web 端](/guide/web)。
 
 ## `iot/` — 设备侧(第二个 Go module)
 
@@ -43,4 +43,4 @@ Docusaurus 3(docs-only 模式,`routeBasePath: '/'`,根 `/` 由[快速开始](/)�
 
 ## 共享设计 token
 
-品牌色 `#2B5FF6` 跨端一致:小程序 `app.wxss` 的 `--color-primary` / `--td-brand-color`;Web Carbon 主题 `g10`;文档站 `docs/src/css/custom.css`。
+品牌色 `#2B5FF6` 跨端一致:小程序 `app.wxss` 的 `--color-primary` / `--td-brand-color`;Web 端 Ant Design 主题(浅色 / 深色,存储名 `g10` / `g100`);文档站 `docs/src/css/custom.css`。

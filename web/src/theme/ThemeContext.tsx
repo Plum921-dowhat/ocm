@@ -9,19 +9,19 @@ import {
   type ReactNode,
 } from 'react'
 
-// The app is migrating from Carbon to Ant Design. Both design systems need a
-// colour mode, so this context owns the single source of truth and exposes:
+// Two layers need a colour mode - the `cds--*` class on <html> (app.scss keys
+// its light/dark token bridge off it) and the Ant Design ConfigProvider - so
+// this context owns the single source of truth and exposes:
 //
 //   - `preference`  what the user picked (system | a concrete theme name)
 //   - `theme`       the resolved theme name, applied as a `cds--<name>` class
-//                   on <html>; app.scss keys its light/dark token bridge off
-//                   those classes, so the names are kept even though Carbon
-//                   itself is gone
+//                   on <html>; the names are the historical Carbon ones and
+//                   are kept because stored preferences still use them
 //   - `colorScheme` the same decision reduced to light/dark, consumed by the
 //                   Ant Design ConfigProvider (see theme/AntdProvider.tsx)
 //
 // `white`/`g10` are both light and `g90`/`g100` are both dark, so the two
-// systems never disagree. The four names stay accepted for stored preferences;
+// layers never disagree. The four names stay accepted for stored preferences;
 // the picker only offers system/light/dark.
 export const THEME_NAMES = ['white', 'g10', 'g90', 'g100'] as const
 export type ThemeName = (typeof THEME_NAMES)[number]
@@ -61,7 +61,7 @@ export function resolveTheme(preference: ThemePreference, systemDark: boolean): 
 export interface ThemeContextValue {
   /** The stored preference: "system" or an explicit theme name. */
   preference: ThemePreference
-  /** The concrete Carbon theme currently applied to <html>. */
+  /** The resolved theme name currently applied to <html> (kept `g10`/`g100` naming). */
   theme: ThemeName
   /** Light/dark projection of `theme`, used by the Ant Design provider. */
   colorScheme: ColorScheme

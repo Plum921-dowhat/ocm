@@ -1977,6 +1977,11 @@ body {
   color: var(--cds-text-secondary);
 }
 
+// Why the save button is disabled. Without this the button just looks broken.
+.settings-card__save-issues {
+  color: var(--ant-color-warning, #d46b08);
+}
+
 @media screen and (max-width: 720px) {
   .settings-row {
     grid-template-columns: 1fr;
@@ -2390,8 +2395,8 @@ body {
 
 // --- Ant Design migration ---------------------------------------------------
 // Styles for the components migrated off Carbon. Everything below uses Ant
-// Design's class names or the project's own `ds-` namespace, so it can be
-// removed cleanly once the last Carbon import is gone.
+// Design's class names or the project's own `ds-` namespace; Carbon is no
+// longer imported anywhere, so nothing here depends on it.
 
 .app-shell {
   min-block-size: 100vh;

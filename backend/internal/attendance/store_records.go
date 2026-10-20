@@ -197,8 +197,14 @@ WHERE u.id = $2`, checkinID, userID).Scan(
 // plus one row per roster student (and per record-holding student outside the
 // roster), with per-checkin statuses and per-status totals.
 func (s *Store) OfferingSummary(ctx context.Context, offeringID int64) (OfferingSummary, error) {
-	var out OfferingSummary
-	out.OfferingID = offeringID
+	// Non-nil slices so an empty result marshals as [] rather than null: a nil
+	// slice becomes JSON null, and the console reads .length / .map on these
+	// fields (a null rows used to blank the whole report page).
+	out := OfferingSummary{
+		OfferingID: offeringID,
+		Checkins:   []CheckinView{},
+		Rows:       []SummaryRow{},
+	}
 	if err := s.db.QueryRowContext(ctx, `
 SELECT c.name, tc.name, o.semester, o.teacher
 FROM course_offerings o
@@ -216,8 +222,10 @@ WHERE o.id = $1`, offeringID).Scan(&out.CourseName, &out.TeachingClassName, &out
 		return OfferingSummary{}, err
 	}
 	out.Checkins = checkins
+	if out.Checkins == nil {
+		out.Checkins = []CheckinView{}
+	}
 	if len(checkins) == 0 {
-		out.Rows = []SummaryRow{}
 		return out, nil
 	}
 

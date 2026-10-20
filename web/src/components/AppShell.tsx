@@ -218,7 +218,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   : t('aria.navToggleClose')
             }
             icon={collapsed && !isMobile ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => (isMobile ? setDrawerOpen(true) : setCollapsed(!collapsed))}
+            // Toggle, not "open": the label already flips to "close" while the
+            // drawer is open, so the handler must actually close it. (The panel
+            // covers this button today, but the label must not lie.)
+            onClick={() => (isMobile ? setDrawerOpen((v) => !v) : setCollapsed((v) => !v))}
           />
 
           <div className="app-shell__header-spacer" />
