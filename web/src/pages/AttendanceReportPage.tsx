@@ -71,6 +71,12 @@ export default function AttendanceReportPage() {
   }
 
   const checkins = summary?.checkins ?? []
+  // The API serialises an empty Go slice as null, so rows can arrive as null
+  // even though the type says array. Normalise once here: the summary line and
+  // the "everyone is outside the roster" hint used to dereference
+  // summary.rows directly, which blanked the page for any offering without
+  // students (the default state of a fresh install).
+  const summaryRows = summary?.rows ?? []
 
   const buildRow = (r: SummaryRow): ReportRow => {
     const row: ReportRow = { id: String(r.userId), displayName: r.displayName, studentNo: r.studentNo, adminClass: r.adminClass, totals: '' }
@@ -80,7 +86,7 @@ export default function AttendanceReportPage() {
     row.totals = TOTAL_KEYS.map((k) => r.totals[k] ?? 0).join(' / ')
     return row
   }
-  const rows = (summary?.rows ?? []).map(buildRow)
+  const rows = summaryRows.map(buildRow)
 
   const columns: TableColumnsType<ReportRow> = [
     {
@@ -174,7 +180,7 @@ export default function AttendanceReportPage() {
             {summary.courseName} · {summary.teachingClassName} · {summary.semester} ·{' '}
             {t('report.summaryTeacher', { teacher: summary.teacher || '-' })} ·{' '}
             {t('report.summaryCheckins', { count: checkins.length })} ·{' '}
-            {t('report.summaryStudents', { count: summary.rows.length })}
+            {t('report.summaryStudents', { count: summaryRows.length })}
           </p>
           {checkins.length === 0 && (
             <Alert
@@ -185,7 +191,7 @@ export default function AttendanceReportPage() {
               className="courses-page__notice"
             />
           )}
-          {summary.rows.every((r) => !r.inRoster) && (
+          {summaryRows.every((r) => !r.inRoster) && (
             <Alert
               type="warning"
               showIcon

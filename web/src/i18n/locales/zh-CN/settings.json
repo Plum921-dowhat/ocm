@@ -75,6 +75,8 @@
     "disabled": "未启用"
   },
   "unsavedHint": "有未保存的修改",
+  "blockedHint": "还需填写：{{fields}}",
+  "listSeparator": "、",
   "savedHint": "已是最新配置",
   "readonlyBadge": "只读"
 }

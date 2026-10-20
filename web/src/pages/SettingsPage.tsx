@@ -139,8 +139,12 @@ function SettingsRow({
   )
 }
 
-function SaveBar({ blocked, saving, disabled, dirty, onSave }: {
+function SaveBar({ blocked, issues = [], saving, disabled, dirty, onSave }: {
   blocked: boolean
+  // Why the save is blocked, in the section's own field labels. A disabled
+  // button with no explanation reads as a bug - the user cannot tell which
+  // field the server would reject.
+  issues?: string[]
   saving: boolean
   disabled: boolean
   dirty: boolean
@@ -148,10 +152,17 @@ function SaveBar({ blocked, saving, disabled, dirty, onSave }: {
 }) {
   const { t } = useTranslation('settings')
   if (disabled) return null
+  const showIssues = dirty && blocked && issues.length > 0
   return (
     <div className="settings-card__save">
       <span className="settings-card__save-state">
         {dirty ? t('unsavedHint') : t('savedHint')}
+        {showIssues && (
+          <span className="settings-card__save-issues">
+            {' · '}
+            {t('blockedHint', { fields: issues.join(t('listSeparator')) })}
+          </span>
+        )}
       </span>
       <Button
         type="primary"
@@ -213,16 +224,17 @@ function MailSection({ disabled }: { disabled: boolean }) {
   const { t } = useTranslation('settings')
   const s = useSettings<MailMaskedSettings>('/api/settings/email', MAIL_DEFAULTS, t('mail.savedNotice'))
   const { form, setForm } = s
-  // Mirrors the server-side validation for enabled services so the save
-  // button stays disabled on invalid input.
-  const valid =
-    !form.enabled ||
-    (form.host.trim() !== '' &&
-      form.username.trim() !== '' &&
-      form.fromAddress.trim() !== '' &&
-      form.fromAddress.includes('@') &&
-      form.port >= 1 &&
-      form.port <= 65535)
+  // Mirrors the server-side validation for enabled services. The list doubles
+  // as the user-facing explanation of why save is blocked, so keep the labels
+  // in the same order as the rows below.
+  const issues: string[] = []
+  if (form.enabled) {
+    if (!form.host.trim()) issues.push(t('mail.host'))
+    if (!(form.port >= 1 && form.port <= 65535)) issues.push(t('mail.port'))
+    if (!form.username.trim()) issues.push(t('mail.username'))
+    if (!form.fromAddress.trim() || !form.fromAddress.includes('@')) issues.push(t('mail.fromAddress'))
+  }
+  const valid = issues.length === 0
 
   return (
     <SettingsCard
@@ -238,7 +250,7 @@ function MailSection({ disabled }: { disabled: boolean }) {
         />
       }
       footer={
-        <SaveBar blocked={!valid} saving={s.saving} disabled={disabled} dirty={s.dirty} onSave={s.save} />
+        <SaveBar blocked={!valid} issues={issues} saving={s.saving} disabled={disabled} dirty={s.dirty} onSave={s.save} />
       }
     >
       {s.error && <Alert type="error" showIcon title={t('error.action')} description={s.error} />}
@@ -248,6 +260,7 @@ function MailSection({ disabled }: { disabled: boolean }) {
           id="mail-host"
           placeholder="smtp.example.com"
           value={form.host}
+          status={form.enabled && !form.host.trim() ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, host: e.target.value })}
         />
@@ -258,6 +271,7 @@ function MailSection({ disabled }: { disabled: boolean }) {
           min={1}
           max={65535}
           value={form.port}
+          status={form.enabled && !(form.port >= 1 && form.port <= 65535) ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(value) => setForm({ ...form, port: Number(value) })}
         />
@@ -266,6 +280,7 @@ function MailSection({ disabled }: { disabled: boolean }) {
         <Input
           id="mail-username"
           value={form.username}
+          status={form.enabled && !form.username.trim() ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, username: e.target.value })}
         />
@@ -293,6 +308,7 @@ function MailSection({ disabled }: { disabled: boolean }) {
           id="mail-from-address"
           placeholder="notify@example.com"
           value={form.fromAddress}
+          status={form.enabled && (!form.fromAddress.trim() || !form.fromAddress.includes('@')) ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, fromAddress: e.target.value })}
         />
@@ -329,12 +345,13 @@ function StorageSection({ disabled }: { disabled: boolean }) {
   const { form, setForm } = s
   // Mirrors the server-side validation for enabled services so the save
   // button stays disabled on invalid input.
-  const valid =
-    !form.enabled ||
-    (form.endpoint.trim() !== '' &&
-      !form.endpoint.includes('://') &&
-      form.bucket.trim() !== '' &&
-      form.accessKey.trim() !== '')
+  const issues: string[] = []
+  if (form.enabled) {
+    if (!form.endpoint.trim() || form.endpoint.includes('://')) issues.push(t('storage.endpoint'))
+    if (!form.bucket.trim()) issues.push(t('storage.bucket'))
+    if (!form.accessKey.trim()) issues.push(t('storage.accessKey'))
+  }
+  const valid = issues.length === 0
 
   return (
     <SettingsCard
@@ -350,7 +367,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
         />
       }
       footer={
-        <SaveBar blocked={!valid} saving={s.saving} disabled={disabled} dirty={s.dirty} onSave={s.save} />
+        <SaveBar blocked={!valid} issues={issues} saving={s.saving} disabled={disabled} dirty={s.dirty} onSave={s.save} />
       }
     >
       {s.error && <Alert type="error" showIcon title={t('error.action')} description={s.error} />}
@@ -360,6 +377,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
           id="storage-endpoint"
           placeholder="cos.ap-guangzhou.myqcloud.com"
           value={form.endpoint}
+          status={form.enabled && (!form.endpoint.trim() || form.endpoint.includes('://')) ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, endpoint: e.target.value })}
         />
@@ -377,6 +395,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
         <Input
           id="storage-bucket"
           value={form.bucket}
+          status={form.enabled && !form.bucket.trim() ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, bucket: e.target.value })}
         />
@@ -385,6 +404,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
         <Input
           id="storage-access-key"
           value={form.accessKey}
+          status={form.enabled && !form.accessKey.trim() ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, accessKey: e.target.value })}
         />
@@ -450,11 +470,13 @@ function AiSection({ disabled }: { disabled: boolean }) {
   const { form, setForm } = s
   // Mirrors the server-side validation for enabled services so the save
   // button stays disabled on invalid input.
-  const valid =
-    !form.enabled ||
-    (isHttpUrl(form.baseUrl.trim()) &&
-      form.model.trim() !== '' &&
-      (form.apiKey.trim() !== '' || form.apiKeySet))
+  const issues: string[] = []
+  if (form.enabled) {
+    if (!isHttpUrl(form.baseUrl.trim())) issues.push(t('ai.baseUrl'))
+    if (!form.model.trim()) issues.push(t('ai.model'))
+    if (!form.apiKey.trim() && !form.apiKeySet) issues.push(t('ai.apiKey'))
+  }
+  const valid = issues.length === 0
 
   return (
     <SettingsCard
@@ -470,7 +492,7 @@ function AiSection({ disabled }: { disabled: boolean }) {
         />
       }
       footer={
-        <SaveBar blocked={!valid} saving={s.saving} disabled={disabled} dirty={s.dirty} onSave={s.save} />
+        <SaveBar blocked={!valid} issues={issues} saving={s.saving} disabled={disabled} dirty={s.dirty} onSave={s.save} />
       }
     >
       {s.error && <Alert type="error" showIcon title={t('error.action')} description={s.error} />}
@@ -480,6 +502,7 @@ function AiSection({ disabled }: { disabled: boolean }) {
           id="ai-base-url"
           placeholder="https://api.openai.com/v1"
           value={form.baseUrl}
+          status={form.enabled && !isHttpUrl(form.baseUrl.trim()) ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
         />
@@ -489,6 +512,7 @@ function AiSection({ disabled }: { disabled: boolean }) {
           id="ai-model"
           placeholder="gpt-4o-mini"
           value={form.model}
+          status={form.enabled && !form.model.trim() ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, model: e.target.value })}
         />
@@ -498,6 +522,7 @@ function AiSection({ disabled }: { disabled: boolean }) {
           id="ai-api-key"
           placeholder={form.apiKeySet ? t('placeholder.set') : t('placeholder.unset')}
           value={form.apiKey}
+          status={form.enabled && !form.apiKey.trim() && !form.apiKeySet ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
         />

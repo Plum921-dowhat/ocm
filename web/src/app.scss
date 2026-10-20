@@ -1977,6 +1977,11 @@ body {
   color: var(--cds-text-secondary);
 }
 
+// Why the save button is disabled. Without this the button just looks broken.
+.settings-card__save-issues {
+  color: var(--ant-color-warning, #d46b08);
+}
+
 @media screen and (max-width: 720px) {
   .settings-row {
     grid-template-columns: 1fr;
