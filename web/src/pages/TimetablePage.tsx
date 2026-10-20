@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Breadcrumb, Button, Input, Modal, Select, DatePicker } from 'antd'
-import { DeleteOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { Alert, Breadcrumb, Button, Select } from 'antd'
+import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
+import SessionFormModal from '../components/SessionFormModal'
 import TimetableGrid from '../components/TimetableGrid'
 import Field from '../ui/Field'
 import { addDays, fmt, mondayOf } from '../utils/date'
-import type { Classroom, OfferingView, Paged, SessionInput, SessionView, TimetableDay } from '../types/api'
+import type { Classroom, OfferingView, Paged, SessionView, TimetableDay } from '../types/api'
 
-// Cell modal state: which grid cell is open, with its existing session (if
-// the cell is occupied).
-interface CellModal {
+// Cell target: which grid cell the session dialog is for, with its existing
+// session (if the cell is occupied). A free cell creates a session prefilled
+// with the clicked date/period/classroom; an occupied cell edits that session.
+interface CellTarget {
   date: string
   periodIndex: number
   session?: SessionView
@@ -34,10 +35,11 @@ export default function TimetablePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const [modal, setModal] = useState<CellModal | null>(null)
-  const [form, setForm] = useState({ offeringId: '', classroomId: '', date: '', periodStart: '', periodEnd: '', note: '' })
-  const [modalError, setModalError] = useState('')
-  const [saving, setSaving] = useState(false)
+  // One dialog for both create and edit: the shared SessionFormModal carries
+  // the timetable picker ("pick from timetable"), which is the whole point of
+  // editing a session here - the grid click already knows the date/period, and
+  // the picker covers moving it to another slot/classroom.
+  const [cell, setCell] = useState<CellTarget | null>(null)
 
   useEffect(() => {
     // Dropdowns need (near-)full lists; pull the maximum page and unwrap the
@@ -75,67 +77,14 @@ export default function TimetablePage() {
   }, [fetchTimetable])
 
   const openCell = (date: string, periodIndex: number, session?: SessionView) => {
-    setModal({ date, periodIndex, session })
-    setForm({
-      offeringId: session ? String(session.offeringId) : '',
-      classroomId: String(classroomId),
-      date,
-      periodStart: String(session ? session.periodStart : periodIndex),
-      periodEnd: String(session ? session.periodEnd : periodIndex),
-      note: session ? session.note : '',
-    })
-    setModalError('')
+    setCell({ date, periodIndex, session })
   }
 
-  const submit = async () => {
-    if (!form.offeringId) {
-      setModalError(t('validation.selectOffering'))
-      return
-    }
-    const periodStart = Number(form.periodStart)
-    const periodEnd = form.periodEnd ? Number(form.periodEnd) : periodStart
-    if (!periodStart || periodStart < 1 || periodEnd < periodStart) {
-      setModalError(t('validation.periodRange'))
-      return
-    }
-    const body: SessionInput = {
-      offeringId: Number(form.offeringId),
-      classroomId: Number(form.classroomId),
-      date: form.date,
-      periodStart,
-      periodEnd,
-      note: form.note.trim(),
-    }
-    try {
-      setSaving(true)
-      setModalError('')
-      if (modal?.session) {
-        await apiFetch(`/api/sessions/${modal.session.id}`, { method: 'PUT', token, body })
-      } else {
-        await apiFetch('/api/sessions', { method: 'POST', token, body })
-      }
-      setModal(null)
-      await fetchTimetable()
-    } catch (err) {
-      setModalError((err as Error).message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const remove = async () => {
-    if (!modal?.session) return
-    try {
-      setSaving(true)
-      setModalError('')
-      await apiFetch(`/api/sessions/${modal.session.id}`, { method: 'DELETE', token })
-      setModal(null)
-      await fetchTimetable()
-    } catch (err) {
-      setModalError((err as Error).message)
-    } finally {
-      setSaving(false)
-    }
+  // Passed to the dialog only for managers: the delete action renders when
+  // both the target session and this callback exist.
+  const removeSession = async (session: SessionView) => {
+    await apiFetch(`/api/sessions/${session.id}`, { method: 'DELETE', token })
+    await fetchTimetable()
   }
 
   return (
@@ -217,94 +166,23 @@ export default function TimetablePage() {
         <TimetableGrid days={days} interactive={canManage} onCellClick={openCell} />
       )}
 
-      {/* Session add/edit modal */}
-      <Modal
-        open={Boolean(modal)}
-        title={modal?.session ? t('modal.edit') : t('modal.create')}
-        okText={t('modal.submit')}
-        cancelText={t('action.cancel', { ns: 'common' })}
-        onCancel={() => setModal(null)}
-        onOk={submit}
-        confirmLoading={saving}
-        destroyOnHidden
-      >
-        <div className="courses-page__form">
-          <Field label={t('form.offering')} htmlFor="s-offering">
-            <Select
-              id="s-offering"
-              value={form.offeringId}
-              onChange={(value: string) => setForm({ ...form, offeringId: value })}
-              options={[
-                { value: '', label: t('form.selectOffering') },
-                ...offerings.map((o) => ({
-                  value: String(o.id),
-                  label: t('form.offeringOption', {
-                    catalogName: o.catalogName,
-                    teachingClassName: o.teachingClassName,
-                    semester: o.semester,
-                  }),
-                })),
-              ]}
-            />
-          </Field>
-          <Field label={t('form.classroom')} htmlFor="s-classroom">
-            <Select
-              id="s-classroom"
-              value={form.classroomId}
-              onChange={(value: string) => setForm({ ...form, classroomId: value })}
-              options={classrooms.map((c) => ({ value: String(c.id), label: c.name }))}
-            />
-          </Field>
-          <Field label={t('form.date')} htmlFor="s-date">
-            <DatePicker
-              id="s-date"
-              allowClear={false}
-              value={form.date ? dayjs(form.date) : null}
-              onChange={(d) => setForm({ ...form, date: d ? d.format('YYYY-MM-DD') : '' })}
-            />
-          </Field>
-          <Field label={t('form.periodStart')} htmlFor="s-period-start">
-            <Input
-              id="s-period-start"
-              type="number"
-              min="1"
-              value={form.periodStart}
-              onChange={(e) => setForm({ ...form, periodStart: e.target.value })}
-            />
-          </Field>
-          <Field label={t('form.periodEnd')} htmlFor="s-period-end">
-            <Input
-              id="s-period-end"
-              type="number"
-              min="1"
-              value={form.periodEnd}
-              onChange={(e) => setForm({ ...form, periodEnd: e.target.value })}
-            />
-          </Field>
-          <Field label={t('form.note')} htmlFor="s-note">
-            <Input
-              id="s-note"
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-            />
-          </Field>
-          {modalError && (
-            <Alert type="error" showIcon title={t('error.save')} description={modalError} />
-          )}
-        </div>
-        {modal?.session && canManage && (
-          <Button
-            danger
-            size="small"
-            icon={<DeleteOutlined />}
-            onClick={remove}
-            disabled={saving}
-            className="timetable__delete"
-          >
-            {t('modal.remove')}
-          </Button>
-        )}
-      </Modal>
+      <SessionFormModal
+        open={Boolean(cell)}
+        target={cell?.session ?? null}
+        defaults={{
+          classroomId,
+          date: cell?.date,
+          periodStart: cell ? String(cell.periodIndex) : undefined,
+          periodEnd: cell ? String(cell.periodIndex) : undefined,
+        }}
+        offerings={offerings}
+        classrooms={classrooms}
+        onSuccess={() => {
+          void fetchTimetable()
+        }}
+        onClose={() => setCell(null)}
+        onDelete={canManage ? removeSession : undefined}
+      />
     </div>
   )
 }

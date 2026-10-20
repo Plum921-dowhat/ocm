@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Input, Modal, Select, DatePicker } from 'antd'
-import { CalendarOutlined } from '@ant-design/icons'
+import { CalendarOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -15,6 +15,13 @@ export interface SessionFormModalProps {
   target: SessionView | null
   /** Preselected offering for create mode (e.g. from an L2 expanded row). Not locked - the user may change it. */
   defaultOfferingId?: string
+  /**
+   * Create-mode prefill from a clicked timetable cell: the grid already knows
+   * the date/period/classroom the user aimed at, so the form opens on those
+   * values instead of empty inputs. Ignored when `target` is set (edit mode
+   * reads everything from the session).
+   */
+  defaults?: SessionFormDefaults
   offerings: OfferingView[]
   classrooms: Classroom[]
   /**
@@ -24,6 +31,19 @@ export interface SessionFormModalProps {
    */
   onSuccess: (offeringId: number, prevOfferingId?: number) => void
   onClose: () => void
+  /**
+   * When provided, edit mode shows a delete action for the target session.
+   * Errors thrown here are surfaced inline; the dialog stays open.
+   */
+  onDelete?: (target: SessionView) => void | Promise<void>
+}
+
+/** Create-mode prefill coming from a timetable grid cell. */
+export interface SessionFormDefaults {
+  classroomId?: string
+  date?: string
+  periodStart?: string
+  periodEnd?: string
 }
 
 // Form state keeps ids/numbers as strings while editing; converted on submit.
@@ -47,16 +67,25 @@ export default function SessionFormModal({
   open,
   target,
   defaultOfferingId,
+  defaults,
   offerings,
   classrooms,
   onSuccess,
   onClose,
+  onDelete,
 }: SessionFormModalProps) {
   const { t } = useTranslation('courses')
   const { token } = useAuth()
   const [form, setForm] = useState<SessionForm>(emptyForm)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Unwrap the prefill into scalars: callers build `defaults` inline, so the
+  // object identity changes on every render and would retrigger the reset
+  // effect (wiping whatever the user is typing).
+  const defaultClassroomId = defaults?.classroomId
+  const defaultDate = defaults?.date
+  const defaultPeriodStart = defaults?.periodStart
+  const defaultPeriodEnd = defaults?.periodEnd
   // Timetable picker layered on top of this dialog: picking a free cell
   // backfills classroom/date/periods here for review before submitting.
   // While it is open this form's Modal is closed: two stacked modals keep two
@@ -80,10 +109,17 @@ export default function SessionFormModal({
             periodEnd: String(target.periodEnd),
             note: target.note,
           }
-        : { ...emptyForm, offeringId: defaultOfferingId ?? '' },
+        : {
+            ...emptyForm,
+            offeringId: defaultOfferingId ?? '',
+            classroomId: defaultClassroomId ?? '',
+            date: defaultDate ?? '',
+            periodStart: defaultPeriodStart ?? '',
+            periodEnd: defaultPeriodEnd ?? '',
+          },
     )
     setError('')
-  }, [open, target, defaultOfferingId])
+  }, [open, target, defaultOfferingId, defaultClassroomId, defaultDate, defaultPeriodStart, defaultPeriodEnd])
 
   const submit = async () => {
     if (!form.offeringId) {
@@ -126,6 +162,24 @@ export default function SessionFormModal({
     } catch (err) {
       // 409 classroom conflict / 400 invalid period: keep the dialog open and
       // surface the backend message.
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Delete lives in this dialog only when the caller passes onDelete (the
+  // timetable page provides it so a clicked session can be removed in place).
+  // The caller owns the request; failures surface inline and keep the dialog
+  // open, same as submit.
+  const handleDelete = async () => {
+    if (!target || !onDelete) return
+    try {
+      setSaving(true)
+      setError('')
+      await onDelete(target)
+      onClose()
+    } catch (err) {
       setError((err as Error).message)
     } finally {
       setSaving(false)
@@ -220,6 +274,18 @@ export default function SessionFormModal({
           </Field>
           {error && <Alert type="error" showIcon title={t('error.save')} description={error} />}
         </div>
+        {target && onDelete && (
+          <Button
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            onClick={handleDelete}
+            disabled={saving}
+            className="session-form__delete"
+          >
+            {t('sessionModal.remove')}
+          </Button>
+        )}
       </Modal>
       <TimetablePickerModal
         open={pickerOpen}

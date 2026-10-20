@@ -382,22 +382,22 @@ export default function CourseManagementPage() {
 
   const offeringColumns: TableColumnsType<OfferingView> = [
     { title: t('offeringField.id'), dataIndex: 'id', width: 72 },
-    { title: t('offeringField.catalogName'), dataIndex: 'catalogName', width: 200, render: (v: string) => v || '-' },
-    { title: t('offeringField.catalogCode'), dataIndex: 'catalogCode', width: 120, render: (v: string) => v || '-' },
+    { title: t('offeringField.catalogName'), dataIndex: 'catalogName', width: 180, render: (v: string) => v || '-' },
+    { title: t('offeringField.catalogCode'), dataIndex: 'catalogCode', width: 110, render: (v: string) => v || '-' },
     {
       title: t('offeringField.teachingClassName'),
       dataIndex: 'teachingClassName',
-      width: 180,
+      width: 160,
       render: (v: string) => v || '-',
     },
     {
       title: t('offeringField.classNames'),
       dataIndex: 'classNames',
-      width: 200,
+      width: 180,
       render: (value: string[]) => (Array.isArray(value) && value.length ? listFmt.format(value) : '-'),
     },
-    { title: t('offeringField.teacher'), dataIndex: 'teacher', width: 120, render: (v: string) => v || '-' },
-    { title: t('offeringField.semester'), dataIndex: 'semester', width: 130, render: (v: string) => v || '-' },
+    { title: t('offeringField.teacher'), dataIndex: 'teacher', width: 110, render: (v: string) => v || '-' },
+    { title: t('offeringField.semester'), dataIndex: 'semester', width: 110, render: (v: string) => v || '-' },
   ]
 
   if (canManage) {
@@ -446,13 +446,21 @@ export default function CourseManagementPage() {
             )}
           </div>
           <Table<OfferingView>
-            rowKey="id"
+            // String keys everywhere: expandedRowKeys holds ids as strings
+            // (Set<string>), and Ant Design only matches a row against
+            // expandedRowKeys with an identity comparison - a numeric row key
+            // against "2" silently never expands.
+            rowKey={(record) => String(record.id)}
             size="middle"
             columns={offeringColumns}
             dataSource={offerings.items}
             loading={offerings.loading}
             pagination={false}
-            scroll={{ x: 1200 }}
+            // Column widths sum to 1030 plus the ~48px expand column. 1080 is
+            // the smallest min-width that still shows the Actions column on a
+            // 1440-wide screen (content area ~1144) without horizontal scroll;
+            // narrower screens scroll rather than clip.
+            scroll={{ x: 1080 }}
             locale={{ emptyText: offerings.q ? t('empty.noResults', { ns: 'common' }) : t('empty.noData', { ns: 'common' }) }}
             expandable={{
               expandedRowKeys: Array.from(expandedIds),

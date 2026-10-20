@@ -1767,9 +1767,11 @@ body {
 
 /* ---- session-form timetable picker ---- */
 .timetable-picker__hint {
-  @include type-style('body-01');
+  // Compact: every pixel spent on the hint is a row of the grid the user
+  // cannot see. The full explanation still fits in one or two lines.
+  @include type-style('label-01');
   color: var(--cds-text-secondary);
-  margin-block-end: $spacing-05;
+  margin-block-end: $spacing-03;
 }
 
 // The modal itself scrolls (hasScrollingContent), so the grid renders exactly
@@ -1802,6 +1804,12 @@ body {
   // The form stacks full-width inputs; keep the secondary action visually
   // grouped with the classroom/date/period fields it backfills.
   align-self: flex-start;
+}
+
+.session-form__delete {
+  // Sits under the stacked fields, same rhythm as the timetable page's old
+  // inline delete button.
+  margin-block-start: $spacing-05;
 }
 
 /* ---- logs page ---- */
@@ -2523,6 +2531,13 @@ body {
   inline-size: 280px;
 }
 
+// The pager sits under every list table. Ant Design's Pagination has no outer
+// spacing of its own (Carbon's supplied it), so without this gap it reads as
+// part of the table instead of a control below it.
+.list-pagination {
+  margin-block-start: $spacing-05;
+}
+
 // Login: errors now sit under the Ant Design input instead of inside it.
 .login__field-error {
   margin-block-start: 4px;
@@ -2702,8 +2717,35 @@ body {
 // Timetable picker: a long period list must scroll inside the viewport
 // instead of pushing the modal's footer off screen.
 .timetable-picker .ant-modal-body {
-  max-block-size: calc(100vh - 260px);
-  overflow-y: auto;
+  // The dialog sits 16px from the top; leave room for the title and footer and
+  // let the body take the rest of the viewport so all ten periods fit on a
+  // normal laptop screen. Only the grid scrolls: the hint and the
+  // classroom/week controls stay put, and the day header sticks to the top
+  // while the rows move under it.
+  display: flex;
+  flex-direction: column;
+  max-block-size: calc(100vh - 180px);
+  overflow: hidden;
+}
+
+.timetable-picker__grid {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+}
+
+// The grid brings its own horizontal scroller for the standalone page; inside
+// the picker the wrapper above owns both axes instead of nesting two.
+.timetable-picker .timetable__scroll {
+  overflow: visible;
+}
+
+.timetable-picker .timetable__grid thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  // Sticky headers lose their collapsed-table border, so draw it with a shadow.
+  box-shadow: inset 0 -1px 0 var(--cds-border-subtle);
 }
 
 .timetable-picker .ant-alert {
