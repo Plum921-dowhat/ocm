@@ -114,11 +114,32 @@ $spacing-09: 3rem; // 48px
   --cds-background: #14161a;
 }
 
+// Global page surface.
+//
+// @carbon/styles used to zero the browser's default body margin (8px). After it
+// was removed that margin came back and painted a white frame around the whole
+// app: invisible in light mode where the page is near-white, glaring in dark
+// mode where the page is near-black. The reset belongs to us, not to a UI kit.
+//
+// The background is painted on both <html> and <body> from the theme token so
+// overscroll (macOS rubber-banding) and any hairline gap match the theme
+// instead of showing the white canvas underneath.
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--cds-background);
+}
+
 // Typography is the strongest visual signal of the design system, so the app
 // uses the platform UI stack (Ant Design's default) instead of IBM Plex Sans.
-// Carbon's stylesheet sets the IBM Plex stack on <body>; this rule loads later
-// and wins for the whole app, including the pages still built with Carbon.
 body {
+  min-block-size: 100vh;
+  background: var(--cds-background);
+  color: var(--cds-text-primary);
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
