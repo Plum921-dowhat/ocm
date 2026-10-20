@@ -126,7 +126,11 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           working-directory: backend
-          version: v2.12.2
+          # Must be built with a Go >= the module's `go` directive: v2.13.0 was
+          # the first release built with go1.27, and a linter built with an
+          # older Go refuses to run ("the Go language version used to build
+          # golangci-lint is lower than the targeted Go version").
+          version: v2.15.0
 
       # The IoT SDK is a second Go module (iot/, module github.com/zyang4418/ocm/iot)
       # so it gets the same gate set as backend, pointed at its own directory.
@@ -158,7 +162,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           working-directory: iot
-          version: v2.12.2
+          version: v2.15.0
 
   docker:
     name: Prod image
