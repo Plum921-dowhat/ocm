@@ -1,15 +1,13 @@
-import { ViewType, type ChatInstance } from '@carbon/ai-chat'
-
-// Shared holder for the Carbon AI Chat instance. The chat widget itself is
-// lazy-loaded (React.lazy), so code outside it (e.g. the dashboard quick link)
-// uses these helpers to request the window instead of importing the widget.
-// 'mainWindow' is ChatInstance.changeView(ViewType.MAIN_WINDOW).
-export const aiChatState: { instance: ChatInstance | null; openRequested: boolean } = {
-  instance: null,
+// Bridge for code outside the chat widget. The chat itself is lazy-loaded
+// (React.lazy), so a caller such as the dashboard quick link must not import it
+// directly; it sets `openRequested` and the widget picks the request up when it
+// mounts, or calls `open()` once the widget is alive.
+export const aiChatState: { open: (() => void) | null; openRequested: boolean } = {
+  open: null,
   openRequested: false,
 }
 
 export function openAiChat() {
   aiChatState.openRequested = true
-  aiChatState.instance?.changeView(ViewType.MAIN_WINDOW)
+  aiChatState.open?.()
 }

@@ -6,7 +6,8 @@
     "typeLabel": "Import type",
     "button": "Upload & import",
     "uploading": "Uploading…",
-    "error": "Upload failed"
+    "error": "Upload failed",
+    "chooseFile": "Choose file"
   },
   "schemaIntroTail": " headers (matched by column name, order-independent):",
   "unnamed": "(unnamed)",

@@ -15,15 +15,16 @@
 
 import type { ComponentType } from 'react'
 import {
-  Building,
-  Dashboard,
-  Education,
-  IotConnect,
-  Settings,
-  UserMultiple,
-} from '@carbon/icons-react'
+  ApartmentOutlined,
+  ApiOutlined,
+  DashboardOutlined,
+  ReadOutlined,
+  SettingOutlined,
+  TeamOutlined,
+} from '@ant-design/icons'
+import { toNavIcon } from '../ui/navIcon'
 
-/** Carbon icon components accept a `size` prop in the app shell. */
+/** Nav icons accept a `size` prop; ui/navIcon adapts Ant Design icons to it. */
 export type NavIcon = ComponentType<{ size?: number | string }>
 
 /** Any-of permission gate; absent = visible to all authenticated users. */
@@ -57,12 +58,12 @@ export const builtInEntries: NavEntry[] = [
     kind: 'link',
     path: '/',
     i18nKey: 'nav.overview',
-    icon: Dashboard,
+    icon: toNavIcon(DashboardOutlined),
   },
   {
     kind: 'group',
     i18nKey: 'nav.classroomManagement',
-    icon: Building,
+    icon: toNavIcon(ApartmentOutlined),
     items: [
       { path: '/classrooms', i18nKey: 'nav.classroomList' },
       { path: '/bookings', i18nKey: 'nav.classroomBooking' },
@@ -76,14 +77,14 @@ export const builtInEntries: NavEntry[] = [
   {
     kind: 'group',
     i18nKey: 'nav.iot',
-    icon: IotConnect,
+    icon: toNavIcon(ApiOutlined),
     permission: 'iot:read',
     items: [{ path: '/iot', i18nKey: 'nav.iotDevices' }],
   },
   {
     kind: 'group',
     i18nKey: 'nav.teachingManagement',
-    icon: Education,
+    icon: toNavIcon(ReadOutlined),
     items: [
       { path: '/courses', i18nKey: 'nav.courseManagement' },
       { path: '/timetable', i18nKey: 'nav.timetable' },
@@ -102,7 +103,7 @@ export const builtInEntries: NavEntry[] = [
   {
     kind: 'group',
     i18nKey: 'nav.orgManagement',
-    icon: UserMultiple,
+    icon: toNavIcon(TeamOutlined),
     items: [
       { path: '/users', i18nKey: 'nav.userManagement', permission: 'user:read' },
       { path: '/admin-classes', i18nKey: 'nav.adminClasses' },
@@ -114,7 +115,7 @@ export const builtInEntries: NavEntry[] = [
   {
     kind: 'group',
     i18nKey: 'nav.systemSettings',
-    icon: Settings,
+    icon: toNavIcon(SettingOutlined),
     permission: 'log:read',
     items: [
       { path: '/settings', i18nKey: 'nav.parameters', permission: '*' },

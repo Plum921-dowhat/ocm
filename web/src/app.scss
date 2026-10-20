@@ -1,11 +1,162 @@
-@use '@carbon/styles/scss/spacing' as *;
-@use '@carbon/styles/scss/type' as *;
+// --- Local design tokens -----------------------------------------------------
+// The page styles were written against Carbon's Sass helpers. They are defined
+// here (same names, same scale) so the stylesheet no longer needs
+// @carbon/styles: removing the dependency cannot change any spacing value.
+
+$spacing-01: 0.125rem; // 2px
+$spacing-02: 0.25rem; // 4px
+$spacing-03: 0.5rem; // 8px
+$spacing-04: 0.75rem; // 12px
+$spacing-05: 1rem; // 16px
+$spacing-06: 1.5rem; // 24px
+$spacing-07: 2rem; // 32px
+$spacing-08: 2.5rem; // 40px
+$spacing-09: 3rem; // 48px
+
+// type-style mirrors the Carbon scale but is expressed in the Ant Design
+// weights/sizes the rest of the console uses.
+@mixin type-style($name) {
+  @if $name == 'body-01' {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 400;
+  } @else if $name == 'body-short-01' {
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    font-weight: 400;
+  } @else if $name == 'code-02' {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  } @else if $name == 'heading-01' {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+  } @else if $name == 'heading-02' {
+    font-size: 1rem;
+    line-height: 1.375rem;
+    font-weight: 600;
+  } @else if $name == 'heading-03' {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+  } @else if $name == 'heading-05' {
+    font-size: 1.75rem;
+    line-height: 2.25rem;
+    font-weight: 600;
+  } @else if $name == 'helper-text-01' {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+  } @else if $name == 'label-01' {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+  } @else if $name == 'productive-heading-01' {
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    font-weight: 600;
+  } @else if $name == 'productive-heading-04' {
+    font-size: 1.75rem;
+    line-height: 2.25rem;
+    font-weight: 600;
+  } @else {
+    @error 'Unknown type style: #{$name}';
+  }
+}
+
+// --- Design tokens -----------------------------------------------------------
+// The page styles in this file were written against Carbon's custom properties.
+// Now that the components are Ant Design, those properties are defined here
+// from the product's own palette, so the leftovers no longer inherit IBM's
+// grey/blue scale (and dropping @carbon/styles later cannot change the look).
+//
+// Names keep the `cds-` prefix on purpose: it is the contract every rule below
+// already uses, and it keeps this bridge removable in one block.
+:root {
+  --cds-text-primary: #1f2329;
+  --cds-text-secondary: #646a73;
+  --cds-border-subtle: #e5e6eb;
+  --cds-border-interactive: #2b5ff6;
+  --cds-border-inverse: #1f2329;
+  --cds-link-primary: #2b5ff6;
+  --cds-interactive: #2b5ff6;
+  --cds-focus: #2b5ff6;
+  --cds-layer: #ffffff;
+  --cds-layer-01: #ffffff;
+  --cds-layer-02: #f7f8fa;
+  --cds-layer-accent-01: #f2f3f5;
+  --cds-layer-hover: #f2f3f5;
+  --cds-layer-hover-01: #f2f3f5;
+  --cds-layer-selected: #e8f0ff;
+  --cds-layer-selected-hover: #dbe7ff;
+  --cds-background: #f5f7fa;
+}
+
+.cds--g90,
+.cds--g100 {
+  --cds-text-primary: #f2f3f5;
+  --cds-text-secondary: #a9aeb8;
+  --cds-border-subtle: #33363d;
+  --cds-border-interactive: #6b8cff;
+  --cds-border-inverse: #f2f3f5;
+  --cds-link-primary: #6b8cff;
+  --cds-interactive: #6b8cff;
+  --cds-focus: #6b8cff;
+  --cds-layer: #1c1f24;
+  --cds-layer-01: #1c1f24;
+  --cds-layer-02: #23262b;
+  --cds-layer-accent-01: #2a2d33;
+  --cds-layer-hover: #2a2d33;
+  --cds-layer-hover-01: #2a2d33;
+  --cds-layer-selected: #1e2a44;
+  --cds-layer-selected-hover: #24344f;
+  --cds-background: #14161a;
+}
+
+// Global page surface.
+//
+// @carbon/styles used to zero the browser's default body margin (8px). After it
+// was removed that margin came back and painted a white frame around the whole
+// app: invisible in light mode where the page is near-white, glaring in dark
+// mode where the page is near-black. The reset belongs to us, not to a UI kit.
+//
+// The background is painted on both <html> and <body> from the theme token so
+// overscroll (macOS rubber-banding) and any hairline gap match the theme
+// instead of showing the white canvas underneath.
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--cds-background);
+}
+
+// Typography is the strongest visual signal of the design system, so the app
+// uses the platform UI stack (Ant Design's default) instead of IBM Plex Sans.
+body {
+  min-block-size: 100vh;
+  background: var(--cds-background);
+  color: var(--cds-text-primary);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+}
 
 .app-loading {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+}
+
+.app-loading__text {
+  font-size: 0.875rem;
+  color: var(--cds-text-secondary);
 }
 
 // --- Login page --------------------------------------------------------------
@@ -62,10 +213,13 @@
   gap: 7px;
   block-size: 3rem;
   padding-inline: 1rem;
+  border: none;
+  background: none;
   font-size: 0.875rem;
   line-height: 1.125rem;
   color: var(--cds-text-secondary);
   text-decoration: none;
+  cursor: pointer;
 
   &:hover {
     background-color: var(--cds-layer-hover-01);
@@ -134,7 +288,11 @@
   }
 }
 
-// Form rows (id step / password step with slide transition)
+// Two-step form. Carbon's original version stacked both rows with
+// visibility/opacity transitions; with Ant Design inputs the hidden row could
+// still swallow focus, so the inactive row is now display:none and the active
+// one fades in. Reliability beats the slide animation here: a login form that
+// cannot be typed into is worse than one without a transition.
 .login__rows {
   position: relative;
   margin-block-start: 56px;
@@ -142,39 +300,33 @@
 }
 
 .login__id-row {
-  opacity: 1;
-  transition: opacity 0.15s 0.18s, transform 0.25s ease-in;
+  display: block;
+  animation: login-fade-in 0.18s ease-out;
 }
 
 .login__id-row--out {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  inline-size: 100%;
-  opacity: 0;
-  transform: translateX(-100vw);
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.15s, transform 0.25s ease-in, visibility 0s 0.25s;
+  display: none;
 }
 
 .login__password-row {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  inline-size: 100%;
-  opacity: 0;
-  visibility: hidden;
-  z-index: -1;
-  transition: opacity 0.15s, visibility 0s 0.25s;
+  display: none;
 }
 
 .login__password-row--in {
-  position: relative;
-  opacity: 1;
-  visibility: visible;
-  z-index: 1;
-  transition: opacity 0.15s 0.18s;
+  display: block;
+  animation: login-fade-in 0.18s ease-out;
+}
+
+@keyframes login-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .login__label {
@@ -196,9 +348,8 @@
 .login__realm {
   flex: 0 0 180px;
 
-  .cds--dropdown {
+  .ant-select {
     inline-size: 180px;
-    block-size: 49px;
   }
 }
 
@@ -211,9 +362,8 @@
   margin-block-start: 1rem;
 }
 
-.login__primary-btn.cds--btn {
+.login__primary-btn.ant-btn {
   inline-size: 100%;
-  max-inline-size: none;
   justify-content: space-between;
   padding-inline-end: 12px;
 }
@@ -226,15 +376,11 @@
   block-size: 70px;
   margin-block-start: 18px;
 
-  .cds--form-item.cds--checkbox-wrapper:last-of-type {
+  .ant-checkbox-wrapper {
     flex: 0 0 auto;
     margin: 0;
     block-size: 20px;
     min-block-size: 0;
-  }
-
-  .cds--checkbox__validation-msg {
-    display: none;
   }
 }
 
@@ -277,13 +423,12 @@
   }
 }
 
-.login__sso-btn.cds--btn {
+.login__sso-btn.ant-btn {
   inline-size: 100%;
-  max-inline-size: none;
-  justify-content: space-between;
+  justify-content: center;
   padding-inline-end: 12px;
 
-  svg {
+  img {
     inline-size: 20px;
     block-size: 20px;
   }
@@ -383,11 +528,20 @@
 
 // --- Dashboard -------------------------------------------------------------
 .dashboard {
-  padding-block: $spacing-07 $spacing-09;
-  // One vertical rhythm for every band (KPI row, charts, panels, quick
-  // start): the grid row-gap replaces per-column margins, which silently
-  // missed any band added later.
-  row-gap: $spacing-07;
+  display: block;
+  padding: $spacing-07;
+  max-inline-size: 1600px;
+}
+
+// Vertical rhythm: the bands are direct children, so one rule spaces them
+// without relying on a grid row-gap the Ant Design Row/Col does not have.
+.dashboard > .ant-row,
+.dashboard__kpis {
+  margin-block-start: $spacing-07;
+}
+
+.dashboard__error {
+  margin-block-start: $spacing-05;
 }
 
 .dashboard__heading {
@@ -411,11 +565,21 @@
 }
 
 .dashboard__kpi {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: $spacing-05;
-  min-block-size: 7.5rem;
+  block-size: 100%;
+
+  .ant-card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: $spacing-05;
+    min-block-size: 7.5rem;
+  }
+}
+
+.dashboard__kpi-icon {
+  display: inline-flex;
+  font-size: 20px;
+  color: var(--cds-text-secondary);
 }
 
 .dashboard__kpi--alert {
@@ -457,10 +621,13 @@
 // Section panels (today's sessions, to-do center, recent activity). Vertical
 // spacing between bands comes from the .dashboard grid row-gap.
 .dashboard__panel {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-04;
   block-size: 100%;
+
+  .ant-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-04;
+  }
 }
 
 .dashboard__panel-head {
@@ -575,9 +742,10 @@
   padding-block: $spacing-03;
 
   // Fixed-width period tag column so course names align vertically.
-  .cds--tag {
+  .ant-tag {
     flex: 0 0 5.5rem;
     justify-content: center;
+    margin-inline-end: 0;
   }
 }
 
@@ -682,6 +850,10 @@
 
 .dashboard__quicklink {
   min-block-size: 7rem;
+
+  .ant-card-body {
+    padding: $spacing-05;
+  }
 }
 
 .dashboard__quicklink-title {
@@ -699,7 +871,7 @@
 
 // --- Users page -------------------------------------------------------------
 .users-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .users-page__heading {
@@ -737,6 +909,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: $spacing-02;
+
+  .ant-tag {
+    margin-inline-end: 0;
+  }
 }
 
 .users-page__readonly {
@@ -775,6 +951,19 @@
   margin-block-end: $spacing-04;
 }
 
+.users-page__perm-group-name {
+  margin-block-end: $spacing-02;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+}
+
+.users-page__perm-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-03 $spacing-05;
+}
+
 .users-page__grants-empty {
   @include type-style('body-01');
   color: var(--cds-text-secondary);
@@ -782,7 +971,7 @@
 
 // --- Roles page --------------------------------------------------------------
 .roles-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .roles-page__heading {
@@ -816,8 +1005,19 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-04;
-  max-height: 22rem;
-  overflow-y: auto;
+}
+
+.roles-page__perm-group-name {
+  margin-block-end: $spacing-02;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+}
+
+.roles-page__perm-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-03 $spacing-05;
 }
 
 .roles-page__confirm-text {
@@ -861,7 +1061,7 @@
 }
 
 .classrooms-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .classrooms-page__heading {
@@ -897,7 +1097,7 @@
 
 /* ---- course / schedule / timetable shared ---- */
 .courses-page {
-  padding-block: $spacing-07 $spacing-09;
+  padding: $spacing-07;
 }
 
 .courses-page__heading {
@@ -1035,11 +1235,46 @@
   @include type-style('body-01');
 }
 
-.courses-page__add {
+/* ---- bookings page ---- */
+.bookings-page {
+  padding: $spacing-07;
+}
+
+.bookings-page__heading {
+  @include type-style('heading-05');
+  margin-block-start: $spacing-05;
+}
+
+.bookings-page__subtitle {
+  @include type-style('body-01');
+  color: var(--cds-text-secondary);
+  margin-block: $spacing-03 $spacing-06;
+}
+
+.bookings-page__notice {
   margin-block-end: $spacing-05;
 }
 
-/* ---- bookings page ---- */
+.bookings-page__actions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-01;
+}
+
+.bookings-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.bookings-page__confirm-text {
+  @include type-style('body-01');
+}
+
+.bookings-page__muted {
+  color: var(--cds-text-secondary);
+}
+
 .bookings-page__filters {
   display: flex;
   flex-wrap: wrap;
@@ -1051,6 +1286,7 @@
 .bookings-page__filter {
   flex: 1 1 12rem;
   min-width: 12rem;
+  max-inline-size: 18rem;
 }
 
 .bookings-page__busy {
@@ -1613,6 +1849,13 @@
   color: var(--cds-text-secondary);
 }
 
+.settings-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-05;
+}
+
 .settings-page__heading {
   @include type-style('heading-05');
   margin-block-start: $spacing-05;
@@ -1621,82 +1864,374 @@
 .settings-page__subtitle {
   @include type-style('body-01');
   color: var(--cds-text-secondary);
-  margin-block: $spacing-03 $spacing-07;
+  margin-block: $spacing-03 $spacing-06;
 }
 
-.settings-page__section {
-  margin-block-start: $spacing-09;
+.settings-page__readonly {
+  margin-block-start: $spacing-07;
+  margin-inline-end: 0;
+}
+
+.settings-stack {
   display: flex;
   flex-direction: column;
   gap: $spacing-05;
-  max-inline-size: 24rem;
 }
 
-.settings-page__section-heading {
+.settings-card {
+  .ant-card-body {
+    padding-block-end: 0;
+  }
+}
+
+.settings-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-06;
+}
+
+.settings-card__title {
   @include type-style('heading-03');
+  margin: 0;
 }
 
-.settings-page__section-hint {
+.settings-card__hint {
+  max-inline-size: 72ch;
+  margin-block: $spacing-02 0;
   @include type-style('body-01');
   color: var(--cds-text-secondary);
 }
 
-// --- AI 助手 (Carbon AI Chat 浮窗,自定义 user_defined 项) ---
-
-.ai-chat-item__tools {
+.settings-card__status {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
+  align-items: center;
   gap: $spacing-03;
 }
 
-.ai-chat-item__tool-spinner {
-  display: inline-block;
-  margin-inline-end: $spacing-03;
-  vertical-align: middle;
+.settings-card__tag {
+  margin-inline-end: 0;
 }
 
-.ai-chat-item__proposal {
+.settings-card__divider {
+  margin-block: $spacing-05 $spacing-02;
+}
+
+.settings-card__body {
+  display: flex;
+  flex-direction: column;
+
+  > .ant-alert {
+    margin-block-end: $spacing-03;
+  }
+}
+
+// Label-left / control-right rows read as a configuration table rather than a
+// stack of stretched inputs.
+.settings-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 460px);
+  gap: $spacing-05;
+  align-items: start;
+  padding-block: $spacing-03;
+
+  .ant-input-number {
+    inline-size: 140px;
+  }
+}
+
+.settings-row__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block-start: 6px;
+  @include type-style('body-01');
+}
+
+.settings-row__hint {
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+}
+
+.settings-row__control {
+  min-inline-size: 0;
+}
+
+.settings-card__footer {
   margin-block-start: $spacing-03;
-  padding: $spacing-04 $spacing-05;
+  border-block-start: 1px solid var(--cds-border-subtle);
+}
+
+.settings-card__save {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $spacing-05;
+  padding-block: $spacing-04;
+}
+
+.settings-card__save-state {
+  margin-inline-end: auto;
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+}
+
+@media screen and (max-width: 720px) {
+  .settings-row {
+    grid-template-columns: 1fr;
+    gap: $spacing-02;
+  }
+
+  .settings-row__label {
+    padding-block-start: 0;
+  }
+}
+
+// --- AI 助手 (Ant Design X 浮窗) ----------------------------------------------
+
+// A compact panel anchored to the bottom-right corner, the same footprint the
+// Carbon widget used (380 × 640 max). A full-height drawer covered a whole
+// column of the table, which is too much for an assistant that is opened
+// while working on a page. Fixed positioning keeps it out of the layout flow.
+.ai-chat {
+  position: fixed;
+  inset-inline-end: $spacing-07;
+  inset-block-end: $spacing-07;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  inline-size: 384px;
+  block-size: calc(100vh - 2 * #{$spacing-07});
+  max-block-size: 620px;
+  overflow: hidden;
   border: 1px solid var(--cds-border-subtle);
-  border-radius: $spacing-03;
+  border-radius: 12px;
   background: var(--cds-layer-01);
+  box-shadow:
+    0 12px 32px rgba(31, 35, 41, 0.16),
+    0 2px 8px rgba(31, 35, 41, 0.08);
+  animation: ai-chat-in 180ms cubic-bezier(0, 0, 0.3, 1) both;
+}
+
+@supports (block-size: 100dvh) {
+  .ai-chat {
+    block-size: calc(100dvh - 2 * #{$spacing-07});
+  }
+}
+
+@keyframes ai-chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+  .ai-chat {
+    animation: none;
+  }
+}
+
+// Below the tablet breakpoint the panel becomes a full-screen sheet: 384px
+// would leave no page behind it anyway.
+@media screen and (max-width: 640px) {
+  .ai-chat {
+    inset: 0;
+    inline-size: auto;
+    block-size: 100vh;
+    max-block-size: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  @supports (block-size: 100dvh) {
+    .ai-chat {
+      block-size: 100dvh;
+    }
+  }
+}
+
+.ai-chat__launcher {
+  inset-inline-end: $spacing-06;
+  inset-block-end: $spacing-06;
+}
+
+.ai-chat__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-03;
+  padding: $spacing-03 $spacing-03 $spacing-03 $spacing-05;
+  border-block-end: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+}
+
+.ai-chat__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ai-chat__title {
+  display: flex;
+  align-items: center;
+  gap: $spacing-03;
+  font-weight: 600;
+}
+
+.ai-chat__badge {
+  margin-inline-end: 0;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--cds-text-secondary);
+}
+
+.ai-chat__avatar {
+  background: #e8f0ff;
+  color: #2b5ff6;
+}
+
+.ai-chat__avatar--ai {
+  background: #2b5ff6;
+  color: #fff;
+}
+
+.ai-chat__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+  background: var(--cds-background);
+}
+
+.ai-chat__empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: $spacing-06;
+  padding: $spacing-06 $spacing-05;
+  overflow-y: auto;
+}
+
+.ai-chat__welcome-icon {
+  font-size: 40px;
+  color: #2b5ff6;
+}
+
+.ai-chat__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding: $spacing-05 $spacing-05 $spacing-03;
+  overflow-y: auto;
+}
+
+.ai-chat__bubble {
+  max-inline-size: 100%;
+}
+
+.ai-chat__answer {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+}
+
+.ai-chat__text {
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-chat__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-02;
+
+  .ant-tag {
+    margin-inline-end: 0;
+  }
+}
+
+.ai-chat__stopped {
+  margin: 0;
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+}
+
+.ai-chat__proposal {
   display: flex;
   flex-direction: column;
   gap: $spacing-04;
+  padding: $spacing-04 $spacing-05;
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: 8px;
+  background: var(--cds-layer-01);
 }
 
-.ai-chat-item__proposal-title {
+.ai-chat__proposal-title {
   @include type-style('heading-02');
   margin: 0;
 }
 
-.ai-chat-item__proposal-fields {
-  @include type-style('body-01');
-  display: flex;
-  flex-wrap: wrap;
-  gap: $spacing-05;
-  color: var(--cds-text-secondary);
+.ai-chat__proposal-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-03 $spacing-05;
+  margin: 0;
 
-  span {
-    color: var(--cds-text-primary);
+  dt {
+    @include type-style('helper-text-01');
+    color: var(--cds-text-secondary);
+  }
+
+  dd {
+    margin: 2px 0 0;
+    @include type-style('body-01');
   }
 }
 
-.ai-chat-item__proposal-actions {
+.ai-chat__proposal-purpose {
+  grid-column: 1 / -1;
+}
+
+.ai-chat__proposal-actions {
   display: flex;
   gap: $spacing-03;
 }
 
-.ai-chat-item__proposal-dismissed {
+.ai-chat__proposal-link {
+  white-space: nowrap;
+}
+
+.ai-chat__proposal-dismissed {
+  margin: 0;
   @include type-style('body-01');
   color: var(--cds-text-secondary);
+}
+
+.ai-chat__conflict {
   margin: 0;
 }
 
-.ai-chat-item__proposal-success {
-  @include type-style('body-01');
-  margin: 0;
+.ai-chat__composer {
+  padding: $spacing-04 $spacing-05 $spacing-03;
+  border-block-start: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+}
+
+.ai-chat__disclaimer {
+  margin: $spacing-02 0 0;
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+  text-align: center;
 }
 
 /* ---- observations page (听课评课) ---- */
@@ -1851,4 +2386,412 @@
   flex-wrap: wrap;
   gap: $spacing-03;
   margin-top: auto;
+}
+
+// --- Ant Design migration ---------------------------------------------------
+// Styles for the components migrated off Carbon. Everything below uses Ant
+// Design's class names or the project's own `ds-` namespace, so it can be
+// removed cleanly once the last Carbon import is gone.
+
+.app-shell {
+  min-block-size: 100vh;
+}
+
+.app-shell__sider {
+  border-inline-end: 1px solid var(--cds-border-subtle);
+
+  .ant-layout-sider-children {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 100%;
+  }
+}
+
+.app-shell__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  block-size: 56px;
+  padding-inline: 16px;
+  overflow: hidden;
+  border-block-end: 1px solid var(--cds-border-subtle);
+  white-space: nowrap;
+}
+
+.app-shell__logo {
+  inline-size: 28px;
+  block-size: 28px;
+  flex: none;
+}
+
+.app-shell__brand-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--cds-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-shell__menu {
+  flex: 1;
+  padding-block: 8px;
+  border-inline-end: none !important;
+}
+
+.app-shell__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+
+.app-shell__header-spacer {
+  flex: 1;
+}
+
+.app-shell__actions {
+  align-items: center;
+}
+
+.app-shell__user-name {
+  margin-inline-start: 6px;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.app-shell__content {
+  min-block-size: calc(100vh - 56px);
+}
+
+@media screen and (max-width: 992px) {
+  .app-shell__user-name {
+    display: none;
+  }
+}
+
+// Generic form field (replaces Carbon's labelText/invalid/invalidText props).
+.ds-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.ds-field__label {
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  color: var(--cds-text-secondary);
+}
+
+.ds-field__required {
+  margin-inline-start: 2px;
+  color: #da1e28;
+}
+
+.ds-field__control {
+  display: flex;
+  flex-direction: column;
+}
+
+.ds-field__error {
+  font-size: 0.75rem;
+  color: #da1e28;
+}
+
+.ds-field__hint {
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary);
+}
+
+.ds-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-block-end: 12px;
+}
+
+.ds-table-toolbar__search {
+  inline-size: 280px;
+}
+
+// Login: errors now sit under the Ant Design input instead of inside it.
+.login__field-error {
+  margin-block-start: 4px;
+  font-size: 0.75rem;
+  color: #da1e28;
+}
+
+.login__password-field {
+  display: flex;
+  flex-direction: column;
+}
+
+// Logs page: the migrated page owns its padding (Carbon's Grid used to add
+// the horizontal gutter) and its retention settings are a plain row.
+.logs-page {
+  padding: 24px 24px 40px;
+}
+
+.logs-page__settings-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.logs-page__settings-label {
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+// Pages migrated off the Carbon grid own their own page padding.
+.logs-page,
+.groups-page {
+  padding: 24px;
+}
+
+.ds-table-toolbar__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.ds-table-toolbar__hint {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+// Import page (migrated): the upload row was previously unstyled because its
+// class names had no rules; it now shares the Ant Design control height.
+.imports-page {
+  padding: 24px;
+}
+
+.imports-page__upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-block: 8px 16px;
+}
+
+.imports-page__type-select {
+  inline-size: 240px;
+}
+
+.imports-page__upload-err {
+  margin-block-end: 16px;
+}
+
+.imports-page__schema {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  color: var(--cds-text-secondary);
+}
+
+.imports-page__note {
+  margin: 0 0 24px;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.imports-page__muted {
+  color: var(--cds-text-secondary);
+}
+
+// --- Table/form batch pages -------------------------------------------------
+// These pages reused the shared `courses-page__*` helpers before the migration;
+// they now own their class names, so the primitives are declared once here
+// instead of per page.
+
+.admin-classes-page,
+.teaching-classes-page,
+.observations-page {
+  padding: $spacing-07;
+}
+
+.admin-classes-page__heading,
+.teaching-classes-page__heading,
+.observations-page__heading {
+  @include type-style('heading-05');
+  margin-block-start: $spacing-05;
+}
+
+.admin-classes-page__subtitle,
+.teaching-classes-page__subtitle,
+.observations-page__subtitle {
+  @include type-style('body-01');
+  color: var(--cds-text-secondary);
+  margin-block: $spacing-03 $spacing-07;
+}
+
+.admin-classes-page__notice,
+.teaching-classes-page__notice,
+.observations-page__notice {
+  margin-block-end: $spacing-05;
+}
+
+.admin-classes-page__form,
+.teaching-classes-page__form,
+.observations-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.admin-classes-page__confirm-text,
+.teaching-classes-page__confirm-text,
+.observations-page__confirm-text {
+  @include type-style('body-01');
+}
+
+.admin-classes-page__actions,
+.teaching-classes-page__actions,
+.observations-page__actions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-02;
+}
+
+.admin-classes-page__member-add {
+  display: flex;
+  gap: $spacing-03;
+  align-items: flex-end;
+}
+
+.admin-classes-page__members-title {
+  @include type-style('heading-03');
+  margin-block-end: $spacing-02;
+}
+
+.settings-page {
+  // Extra bottom room so the floating AI chat button never covers the last
+  // card's save bar.
+  padding: $spacing-07 $spacing-07 ($spacing-07 + 4.5rem);
+  max-inline-size: 1120px;
+}
+
+.settings-page__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-05;
+}
+
+// IoT detail: the function cards put a field and its action button on one row.
+.iot-function-card__actions .ds-field {
+  flex: 1 1 12rem;
+}
+
+.courses-page__picker {
+  inline-size: 100%;
+}
+
+.ds-table-toolbar__filter {
+  inline-size: 180px;
+}
+
+// Timetable picker: a long period list must scroll inside the viewport
+// instead of pushing the modal's footer off screen.
+.timetable-picker .ant-modal-body {
+  max-block-size: calc(100vh - 260px);
+  overflow-y: auto;
+}
+
+.timetable-picker .ant-alert {
+  margin-block-end: $spacing-03;
+}
+
+// Split wizard: tags sit in a flow, not as inline chips with trailing margins.
+.imports-page__wizard .ant-tag {
+  margin-inline-end: 0;
+}
+
+// Observation form: sectioned long-form layout (was Carbon's stacked form).
+.observations-page__form-modal .ant-modal-body {
+  max-block-size: calc(100vh - 220px);
+  overflow-y: auto;
+}
+
+.observations-page__section > .ant-alert,
+.observations-page__section-title {
+  margin-block-end: $spacing-03;
+}
+
+.observations-page__section-title {
+  @include type-style('heading-03');
+}
+
+.observations-page__sections {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.observations-page__legend {
+  @include type-style('heading-03');
+  margin-block-end: $spacing-03;
+  padding: 0;
+}
+
+.observations-page__indicator {
+  padding-block: $spacing-03;
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+
+.observations-page__indicator-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-03;
+}
+
+.observations-page__indicator-title {
+  font-weight: 600;
+}
+
+.observations-page__indicator-line {
+  margin: $spacing-02 0 0;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+.observations-page__matrix-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.observations-page__matrix-table th,
+.observations-page__matrix-table td {
+  padding: $spacing-02 $spacing-03;
+  border-block-end: 1px solid var(--cds-border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.observations-page__matrix-question {
+  min-inline-size: 12rem;
+}
+
+.observations-page__muted {
+  color: var(--cds-text-secondary);
+}
+
+.courses-page__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-block-end: 16px;
+}
+
+// Pinned action columns: a hairline makes it obvious the column is pinned over
+// the scrollable content, instead of looking like clipped text.
+.ant-table-thead > tr > .ant-table-cell-fix-right,
+.ant-table-tbody > tr > .ant-table-cell-fix-right {
+  border-inline-start: 1px solid var(--cds-border-subtle);
 }

@@ -1,28 +1,15 @@
 import { useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  ComboBox,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
+  Select,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-  TextInput,
-  type DataTableHeader,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -30,6 +17,7 @@ import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import { formatDate } from '../i18n/formatters'
 import type { AdminClass, AdminClassInput, Paged, StudentProfileInput, StudentProfileView, User } from '../types/api'
 
@@ -57,14 +45,6 @@ export default function AdminClassesPage() {
   // curate members even without admin-class manage rights.
   const canRoster = can('attendance:read')
   const canRosterManage = can('attendance:manage')
-
-  const headers: DataTableHeader[] = [
-    { key: 'id', header: t('field.id') },
-    { key: 'grade', header: t('field.grade') },
-    { key: 'name', header: t('field.name') },
-    { key: 'note', header: t('field.note') },
-    { key: 'createdAt', header: t('field.createdAt') },
-  ]
 
   const list = usePagedList<AdminClass>({ path: '/api/admin-classes', token })
   const { loading } = list
@@ -302,284 +282,319 @@ export default function AdminClassesPage() {
     }
   }
 
+  const columns: TableColumnsType<AdminClass> = [
+    { title: t('field.id'), dataIndex: 'id', width: 72 },
+    {
+      title: t('field.grade'),
+      dataIndex: 'grade',
+      width: 110,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('field.name'),
+      dataIndex: 'name',
+      width: 180,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('field.note'),
+      dataIndex: 'note',
+      ellipsis: true,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('field.createdAt'),
+      dataIndex: 'createdAt',
+      width: 170,
+      render: (value: string) => formatDate(value),
+    },
+  ]
+
   const canAdmin = canManage || canRoster
-  const colSpan = headers.length + (canAdmin ? 1 : 0)
+  if (canAdmin) {
+    columns.push({
+      title: t('field.actions'),
+      key: 'actions',
+      width: 120,
+      fixed: 'right',
+      render: (_, c) => (
+        <div className="admin-classes-page__actions">
+          {canManage && (
+            <>
+              <Button
+                type="text"
+                size="small"
+                aria-label={t('action.edit', { ns: 'common' })}
+                icon={<EditOutlined />}
+                onClick={() => openEdit(c)}
+              />
+              <Button
+                type="text"
+                size="small"
+                danger
+                aria-label={t('action.delete', { ns: 'common' })}
+                icon={<DeleteOutlined />}
+                onClick={() => openDelete(c)}
+              />
+            </>
+          )}
+          {canRoster && (
+            <Button type="text" size="small" onClick={() => openMembers(c)}>
+              {t('field.members')}
+            </Button>
+          )}
+        </div>
+      ),
+    })
+  }
+
+  const memberColumns: TableColumnsType<StudentProfileView> = [
+    { title: t('memberTable.name'), dataIndex: 'displayName' },
+    { title: t('memberTable.username'), dataIndex: 'username' },
+    {
+      title: t('memberTable.studentNo'),
+      dataIndex: 'studentNo',
+      render: (value: string) => value || '-',
+    },
+  ]
+
+  if (canRosterManage) {
+    memberColumns.push({
+      title: t('memberTable.actions'),
+      key: 'actions',
+      width: 140,
+      render: (_, m) => (
+        <div className="admin-classes-page__actions">
+          <Button type="text" size="small" onClick={() => openEditMember(m)}>
+            {t('memberTable.edit')}
+          </Button>
+          <Button type="text" size="small" onClick={() => openRemoveMember(m)}>
+            {t('memberTable.remove')}
+          </Button>
+        </div>
+      ),
+    })
+  }
 
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('title')}</h1>
-        <p className="courses-page__subtitle">{t('subtitle')}</p>
-      </Column>
+    <div className="admin-classes-page">
+      <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="admin-classes-page__heading">{t('title')}</h1>
+      <p className="admin-classes-page__subtitle">{t('subtitle')}</p>
 
-      <Column sm={4} md={8} lg={16}>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-
-        <DataTable rows={list.items.map((c) => ({ ...c, id: String(c.id) }))} headers={headers}>
-          {({ rows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('searchPlaceholder')} />
-                  <ExportButton
-                    path="/api/admin-classes/export"
-                    fallbackName="admin-classes.xlsx"
-                    onError={setExportError}
-                  />
-                  {canManage && (
-                    <Button renderIcon={Add} size="sm" onClick={() => setCreateOpen(true)}>
-                      {t('addButton')}
-                    </Button>
-                  )}
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    {canAdmin && <TableHeader>{t('field.actions')}</TableHeader>}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>
-                        {list.q ? t('empty.search') : t('empty.none')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const c = list.items.find((x) => String(x.id) === String(row.id))
-                      if (!c) return null
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'createdAt') {
-                              return <TableCell key={cell.id}>{formatDate(cell.value as string)}</TableCell>
-                            }
-                            return <TableCell key={cell.id}>{(cell.value as string) || '-'}</TableCell>
-                          })}
-                          {canAdmin && (
-                            <TableCell>
-                              <div className="courses-page__actions">
-                                {canManage && (
-                                  <>
-                                    <Button
-                                      kind="ghost"
-                                      size="sm"
-                                      hasIconOnly
-                                      renderIcon={Edit}
-                                      iconDescription={t('action.edit', { ns: 'common' })}
-                                      onClick={() => openEdit(c)}
-                                    />
-                                    <Button
-                                      kind="ghost"
-                                      size="sm"
-                                      hasIconOnly
-                                      renderIcon={TrashCan}
-                                      iconDescription={t('action.delete', { ns: 'common' })}
-                                      onClick={() => openDelete(c)}
-                                    />
-                                  </>
-                                )}
-                                {canRoster && (
-                                  <Button kind="ghost" size="sm" onClick={() => openMembers(c)}>
-                                    {t('field.members')}
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('error.load')}
+          description={error}
+          className="admin-classes-page__notice"
         />
-      </Column>
+      )}
+
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
+        />
+        <ExportButton
+          path="/api/admin-classes/export"
+          fallbackName="admin-classes.xlsx"
+          onError={setExportError}
+        />
+        {canManage && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            {t('addButton')}
+          </Button>
+        )}
+      </div>
+
+      <Table<AdminClass>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1000 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('modal.create')}
-        primaryButtonText={t('modal.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
+        title={t('modal.create')}
+        okText={t('modal.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        destroyOnHidden
       >
-        <div className="courses-page__form">
-          <TextInput
-            id="ac-grade"
-            labelText={t('form.grade')}
-            placeholder={t('placeholder.grade')}
-            value={createForm.grade}
-            onChange={(e) => setCreateForm({ ...createForm, grade: e.target.value })}
-          />
-          <TextInput
-            id="ac-name"
-            labelText={t('form.name')}
-            placeholder={t('placeholder.name')}
-            value={createForm.name}
-            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-          />
-          <TextInput
-            id="ac-note"
-            labelText={t('form.note')}
-            value={createForm.note}
-            onChange={(e) => setCreateForm({ ...createForm, note: e.target.value })}
-          />
-          {createError && (
-            <InlineNotification kind="error" title={t('error.create')} subtitle={createError} lowContrast hideCloseButton />
-          )}
+        <div className="admin-classes-page__form">
+          <Field label={t('form.grade')} htmlFor="ac-grade">
+            <Input
+              id="ac-grade"
+              placeholder={t('placeholder.grade')}
+              value={createForm.grade}
+              onChange={(e) => setCreateForm({ ...createForm, grade: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.name')} htmlFor="ac-name">
+            <Input
+              id="ac-name"
+              placeholder={t('placeholder.name')}
+              value={createForm.name}
+              onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.note')} htmlFor="ac-note">
+            <Input
+              id="ac-note"
+              value={createForm.note}
+              onChange={(e) => setCreateForm({ ...createForm, note: e.target.value })}
+            />
+          </Field>
+          {createError && <Alert type="error" showIcon title={t('error.create')} description={createError} />}
         </div>
       </Modal>
 
       {/* Edit */}
       <Modal
         open={Boolean(editTarget)}
-        modalHeading={t('modal.edit', { name: editTarget?.name ?? '' })}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditTarget(null)}
-        onRequestSubmit={handleEdit}
-        primaryButtonDisabled={editing}
+        title={t('modal.edit', { name: editTarget?.name ?? '' })}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditTarget(null)}
+        onOk={handleEdit}
+        confirmLoading={editing}
+        destroyOnHidden
       >
-        <div className="courses-page__form">
-          <TextInput
-            id="ac-edit-grade"
-            labelText={t('form.grade')}
-            value={editForm.grade}
-            onChange={(e) => setEditForm({ ...editForm, grade: e.target.value })}
-          />
-          <TextInput
-            id="ac-edit-name"
-            labelText={t('form.name')}
-            value={editForm.name}
-            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-          />
-          <TextInput
-            id="ac-edit-note"
-            labelText={t('form.note')}
-            value={editForm.note}
-            onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
-          />
-          {editError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={editError} lowContrast hideCloseButton />
-          )}
+        <div className="admin-classes-page__form">
+          <Field label={t('form.grade')} htmlFor="ac-edit-grade">
+            <Input
+              id="ac-edit-grade"
+              value={editForm.grade}
+              onChange={(e) => setEditForm({ ...editForm, grade: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.name')} htmlFor="ac-edit-name">
+            <Input
+              id="ac-edit-name"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.note')} htmlFor="ac-edit-note">
+            <Input
+              id="ac-edit-note"
+              value={editForm.note}
+              onChange={(e) => setEditForm({ ...editForm, note: e.target.value })}
+            />
+          </Field>
+          {editError && <Alert type="error" showIcon title={t('error.save')} description={editError} />}
         </div>
       </Modal>
 
       {/* Delete */}
       <Modal
-        danger
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
-        <p className="courses-page__confirm-text">
+        <p className="admin-classes-page__confirm-text">
           {t('deleteConfirm', { name: deleteTarget?.name })}
         </p>
-        {deleteError && (
-          <InlineNotification kind="error" title={t('error.delete')} subtitle={deleteError} lowContrast hideCloseButton />
-        )}
+        {deleteError && <Alert type="error" showIcon title={t('error.delete')} description={deleteError} />}
       </Modal>
 
       {/* Members (学生档案): attendance-gated roster of one admin class. */}
       <Modal
         open={Boolean(membersTarget)}
-        modalHeading={t('modal.members', { name: membersTarget?.name ?? '' })}
-        primaryButtonText={t('modal.membersSubmit')}
-        onRequestClose={() => {
+        title={t('modal.members', { name: membersTarget?.name ?? '' })}
+        okText={t('modal.membersSubmit')}
+        cancelText={null}
+        onCancel={() => {
           setMembersTarget(null)
           setEditMember(null)
           setRemoveMember(null)
         }}
-        onRequestSubmit={() => setMembersTarget(null)}
-        size="lg"
+        onOk={() => setMembersTarget(null)}
+        width={720}
+        destroyOnHidden
       >
-        <div className="courses-page__form">
-          <p className="courses-page__subtitle">{t('membersSubtitle')}</p>
+        <div className="admin-classes-page__form">
+          <p className="admin-classes-page__subtitle">{t('membersSubtitle')}</p>
           {canRosterManage && (
-            <div className="courses-page__member-add">
-              <ComboBox<StudentOption>
-                id="member-pick"
-                titleText={t('memberAdd.title')}
-                placeholder={t('memberAdd.placeholder')}
-                items={studentOptions}
-                itemToString={(item) => (item ? item.text : '')}
-                selectedItem={pickStudent}
-                onChange={(e) => {
-                  if (e.selectedItem) {
-                    setPickStudent(e.selectedItem)
-                  } else {
-                    setPickStudent(null)
-                    searchStudents(e.inputValue ?? '')
-                  }
-                }}
-                shouldFilterItem={() => true}
-              />
-              <TextInput
-                id="member-no"
-                labelText={t('memberAdd.studentNoLabel')}
-                placeholder={t('placeholder.studentNo')}
-                value={pickNo}
-                onChange={(e) => setPickNo(e.target.value)}
-              />
-              <Button size="sm" onClick={handleAddMember} disabled={adding || !pickStudent}>
+            <div className="admin-classes-page__member-add">
+              <Field label={t('memberAdd.title')} htmlFor="member-pick">
+                <Select
+                  id="member-pick"
+                  showSearch
+                  allowClear
+                  filterOption={false}
+                  placeholder={t('memberAdd.placeholder')}
+                  value={pickStudent?.id}
+                  options={studentOptions.map((o) => ({ value: o.id, label: o.text }))}
+                  onSearch={searchStudents}
+                  onChange={(value?: string) => {
+                    setPickStudent(studentOptions.find((o) => o.id === value) ?? null)
+                    if (!value) searchStudents('')
+                  }}
+                />
+              </Field>
+              <Field label={t('memberAdd.studentNoLabel')} htmlFor="member-no">
+                <Input
+                  id="member-no"
+                  placeholder={t('placeholder.studentNo')}
+                  value={pickNo}
+                  onChange={(e) => setPickNo(e.target.value)}
+                />
+              </Field>
+              <Button onClick={handleAddMember} disabled={adding || !pickStudent}>
                 {adding ? t('memberAdd.buttonLoading') : t('memberAdd.button')}
               </Button>
-              {addError && (
-                <InlineNotification kind="error" title={t('error.addMember')} subtitle={addError} lowContrast hideCloseButton />
-              )}
+              {addError && <Alert type="error" showIcon title={t('error.addMember')} description={addError} />}
             </div>
           )}
-          {membersError && (
-            <InlineNotification kind="error" title={t('error.load')} subtitle={membersError} lowContrast hideCloseButton />
-          )}
+          {membersError && <Alert type="error" showIcon title={t('error.load')} description={membersError} />}
           {membersLoading ? (
             <p>{t('empty.loading')}</p>
           ) : members.length === 0 ? (
@@ -588,39 +603,18 @@ export default function AdminClassesPage() {
               {canRosterManage ? t('empty.membersHint') : ''}
             </p>
           ) : (
-            <TableContainer title={t('memberTable.description', { count: members.length })}>
-              <Table size="sm">
-                <TableHead>
-                  <TableRow>
-                    <TableHeader>{t('memberTable.name')}</TableHeader>
-                    <TableHeader>{t('memberTable.username')}</TableHeader>
-                    <TableHeader>{t('memberTable.studentNo')}</TableHeader>
-                    {canRosterManage && <TableHeader>{t('memberTable.actions')}</TableHeader>}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {members.map((m) => (
-                    <TableRow key={m.userId}>
-                      <TableCell>{m.displayName}</TableCell>
-                      <TableCell>{m.username}</TableCell>
-                      <TableCell>{m.studentNo || '-'}</TableCell>
-                      {canRosterManage && (
-                        <TableCell>
-                          <div className="courses-page__actions">
-                            <Button kind="ghost" size="sm" onClick={() => openEditMember(m)}>
-                              {t('memberTable.edit')}
-                            </Button>
-                            <Button kind="ghost" size="sm" onClick={() => openRemoveMember(m)}>
-                              {t('memberTable.remove')}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <Table<StudentProfileView>
+              rowKey="userId"
+              size="small"
+              pagination={false}
+              columns={memberColumns}
+              dataSource={members}
+              title={() => (
+                <span className="admin-classes-page__members-title">
+                  {t('memberTable.description', { count: members.length })}
+                </span>
+              )}
+            />
           )}
         </div>
       </Modal>
@@ -628,50 +622,52 @@ export default function AdminClassesPage() {
       {/* Edit member metadata */}
       <Modal
         open={Boolean(editMember)}
-        modalHeading={t('modal.editMember')}
-        primaryButtonText={t('modal.editMemberSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditMember(null)}
-        onRequestSubmit={handleSaveMember}
-        primaryButtonDisabled={savingMember}
+        title={t('modal.editMember')}
+        okText={t('modal.editMemberSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditMember(null)}
+        onOk={handleSaveMember}
+        confirmLoading={savingMember}
+        destroyOnHidden
       >
-        <div className="courses-page__form">
-          <TextInput
-            id="member-edit-no"
-            labelText={t('memberEditForm.studentNo')}
-            value={editMember?.studentNo ?? ''}
-            onChange={(e) => setEditMember(editMember ? { ...editMember, studentNo: e.target.value } : null)}
-          />
-          <TextInput
-            id="member-edit-note"
-            labelText={t('memberEditForm.note')}
-            value={editMember?.note ?? ''}
-            onChange={(e) => setEditMember(editMember ? { ...editMember, note: e.target.value } : null)}
-          />
+        <div className="admin-classes-page__form">
+          <Field label={t('memberEditForm.studentNo')} htmlFor="member-edit-no">
+            <Input
+              id="member-edit-no"
+              value={editMember?.studentNo ?? ''}
+              onChange={(e) => setEditMember(editMember ? { ...editMember, studentNo: e.target.value } : null)}
+            />
+          </Field>
+          <Field label={t('memberEditForm.note')} htmlFor="member-edit-note">
+            <Input
+              id="member-edit-note"
+              value={editMember?.note ?? ''}
+              onChange={(e) => setEditMember(editMember ? { ...editMember, note: e.target.value } : null)}
+            />
+          </Field>
           {editMemberError && (
-            <InlineNotification kind="error" title={t('error.saveMember')} subtitle={editMemberError} lowContrast hideCloseButton />
+            <Alert type="error" showIcon title={t('error.saveMember')} description={editMemberError} />
           )}
         </div>
       </Modal>
 
       {/* Remove member */}
       <Modal
-        danger
         open={Boolean(removeMember)}
-        modalHeading={t('modal.removeMember')}
-        primaryButtonText={t('modal.removeMemberSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setRemoveMember(null)}
-        onRequestSubmit={handleRemoveMember}
-        primaryButtonDisabled={removing}
+        title={t('modal.removeMember')}
+        okText={t('modal.removeMemberSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setRemoveMember(null)}
+        onOk={handleRemoveMember}
+        confirmLoading={removing}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
-        <p className="courses-page__confirm-text">
+        <p className="admin-classes-page__confirm-text">
           {t('removeMemberConfirm', { name: removeMember?.displayName })}
         </p>
-        {removeError && (
-          <InlineNotification kind="error" title={t('error.removeMember')} subtitle={removeError} lowContrast hideCloseButton />
-        )}
+        {removeError && <Alert type="error" showIcon title={t('error.removeMember')} description={removeError} />}
       </Modal>
-    </Grid>
+    </div>
   )
 }

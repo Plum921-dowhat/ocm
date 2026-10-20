@@ -1,32 +1,20 @@
 import { useEffect, useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
-  MultiSelect,
+  Select,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TextArea,
-  TextInput,
-  type DataTableHeader,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
+import Field from '../ui/Field'
 import { formatDate } from '../i18n/formatters'
 import type { GroupDetail, GroupView, Paged, Role, User } from '../types/api'
 
@@ -51,14 +39,6 @@ export default function GroupsPage() {
   const { t } = useTranslation('groups')
   const { token } = useAuth()
   const navigate = useNavigate()
-
-  const headers: DataTableHeader[] = [
-    { key: 'id', header: t('field.id') },
-    { key: 'name', header: t('field.name') },
-    { key: 'description', header: t('field.description') },
-    { key: 'memberCount', header: t('field.memberCount') },
-    { key: 'createdAt', header: t('field.createdAt') },
-  ]
 
   const [groups, setGroups] = useState<GroupView[]>([])
   const [loading, setLoading] = useState(true)
@@ -157,8 +137,7 @@ export default function GroupsPage() {
     }
   }
 
-  const openEdit = async (group: GroupView | undefined) => {
-    if (!group) return
+  const openEdit = async (group: GroupView) => {
     setEditTarget(group)
     setEditError('')
     try {
@@ -220,247 +199,229 @@ export default function GroupsPage() {
     }
   }
 
-  return (
-    <Grid fullWidth className="groups-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="groups-page__heading">{t('title')}</h1>
-        <p className="groups-page__subtitle">{t('subtitle')}</p>
-      </Column>
-
-      <Column sm={4} md={8} lg={16}>
-        {loadError && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={loadError}
-            lowContrast
-            hideCloseButton
-            className="groups-page__notice"
+  const columns: TableColumnsType<GroupView> = [
+    { title: t('field.id'), dataIndex: 'id', width: 72 },
+    { title: t('field.name'), dataIndex: 'name', width: 200 },
+    { title: t('field.description'), dataIndex: 'description', ellipsis: true },
+    { title: t('field.memberCount'), dataIndex: 'memberCount', width: 110 },
+    {
+      title: t('field.createdAt'),
+      dataIndex: 'createdAt',
+      width: 170,
+      render: (value: string) => formatDate(value),
+    },
+    {
+      title: t('field.actions'),
+      key: 'actions',
+      width: 108,
+      render: (_, group) => (
+        <div className="groups-page__actions">
+          <Button
+            type="text"
+            size="small"
+            aria-label={t('action.edit', { ns: 'common' })}
+            icon={<EditOutlined />}
+            onClick={() => openEdit(group)}
           />
-        )}
+          <Button
+            type="text"
+            size="small"
+            danger
+            aria-label={t('action.delete', { ns: 'common' })}
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              setDeleteTarget(group)
+              setDeleteError('')
+            }}
+          />
+        </div>
+      ),
+    },
+  ]
 
-        <DataTable rows={groups.map((g) => ({ ...g, id: String(g.id) }))} headers={headers}>
-          {({ rows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: groups.length })}>
-              <TableToolbar>
-                <TableToolbarContent>
-                  <Button renderIcon={Add} size="sm" onClick={openCreate}>
-                    {t('addButton')}
-                  </Button>
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>{t('empty.none')}</TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const group = groups.find((x) => String(x.id) === String(row.id))
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'createdAt') {
-                              return <TableCell key={cell.id}>{formatDate(cell.value as string)}</TableCell>
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>
-                          })}
-                          <TableCell>
-                            <div className="groups-page__actions">
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                hasIconOnly
-                                renderIcon={Edit}
-                                iconDescription={t('action.edit', { ns: 'common' })}
-                                onClick={() => openEdit(group)}
-                              />
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                hasIconOnly
-                                renderIcon={TrashCan}
-                                iconDescription={t('action.delete', { ns: 'common' })}
-                                onClick={() => {
-                                  setDeleteTarget(group ?? null)
-                                  setDeleteError('')
-                                }}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-      </Column>
+  const pickerOptions = (options: PickerOption[]) =>
+    options.map((o) => ({ value: o.id, label: o.text }))
+
+  return (
+    <div className="groups-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="groups-page__heading">{t('title')}</h1>
+      <p className="groups-page__subtitle">{t('subtitle')}</p>
+
+      {loadError && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('error.load')}
+          description={loadError}
+          className="groups-page__notice"
+        />
+      )}
+
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: groups.length })}</span>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          {t('addButton')}
+        </Button>
+      </div>
+
+      <Table<GroupView>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={groups}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 900 }}
+        locale={{ emptyText: t('empty.none') }}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('modal.create')}
-        primaryButtonText={t('modal.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
+        title={t('modal.create')}
+        okText={t('modal.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        destroyOnHidden
       >
         <div className="groups-page__form">
-          <TextInput
-            id="create-group-name"
-            labelText={t('form.name')}
-            placeholder={t('placeholder.name')}
-            value={createForm.name}
-            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-          />
-          <TextArea
-            id="create-group-description"
-            labelText={t('form.description')}
-            value={createForm.description}
-            onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-          />
-          <MultiSelect<PickerOption>
-            id="create-group-members"
-            titleText={t('form.members')}
-            label={t('picker.members')}
-            items={userOptions}
-            selectedItems={userOptions.filter((o) => createForm.members.includes(o.id))}
-            onChange={({ selectedItems }) =>
-              setCreateForm({ ...createForm, members: (selectedItems ?? []).map((o) => o.id) })
-            }
-          />
-          <MultiSelect<PickerOption>
-            id="create-group-roles"
-            titleText={t('form.roles')}
-            label={t('picker.roles')}
-            items={roleOptions}
-            selectedItems={roleOptions.filter((o) => createForm.roles.includes(o.id))}
-            onChange={({ selectedItems }) =>
-              setCreateForm({ ...createForm, roles: (selectedItems ?? []).map((o) => o.id) })
-            }
-          />
-          {createError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.create')}
-              subtitle={createError}
-              lowContrast
-              hideCloseButton
+          <Field label={t('form.name')} htmlFor="create-group-name">
+            <Input
+              id="create-group-name"
+              placeholder={t('placeholder.name')}
+              value={createForm.name}
+              onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
             />
-          )}
+          </Field>
+          <Field label={t('form.description')} htmlFor="create-group-description">
+            <Input.TextArea
+              id="create-group-description"
+              rows={3}
+              value={createForm.description}
+              onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.members')} htmlFor="create-group-members">
+            <Select
+              id="create-group-members"
+              mode="multiple"
+              allowClear
+              placeholder={t('picker.members')}
+              options={pickerOptions(userOptions)}
+              value={createForm.members}
+              onChange={(members: string[]) => setCreateForm({ ...createForm, members })}
+              optionFilterProp="label"
+            />
+          </Field>
+          <Field label={t('form.roles')} htmlFor="create-group-roles">
+            <Select
+              id="create-group-roles"
+              mode="multiple"
+              allowClear
+              placeholder={t('picker.roles')}
+              options={pickerOptions(roleOptions)}
+              value={createForm.roles}
+              onChange={(roles: string[]) => setCreateForm({ ...createForm, roles })}
+              optionFilterProp="label"
+            />
+          </Field>
+          {createError && <Alert type="error" showIcon title={t('error.create')} description={createError} />}
         </div>
       </Modal>
 
       {/* Edit */}
       <Modal
         open={Boolean(editTarget)}
-        modalHeading={t('modal.edit', { name: editTarget?.name ?? '' })}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditTarget(null)}
-        onRequestSubmit={handleEdit}
-        primaryButtonDisabled={editing}
+        title={t('modal.edit', { name: editTarget?.name ?? '' })}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditTarget(null)}
+        onOk={handleEdit}
+        confirmLoading={editing}
+        destroyOnHidden
       >
         <div className="groups-page__form">
-          <TextInput
-            id="edit-group-name"
-            labelText={t('form.name')}
-            value={editForm.name}
-            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-          />
-          <TextArea
-            id="edit-group-description"
-            labelText={t('form.description')}
-            value={editForm.description}
-            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-          />
-          <MultiSelect<PickerOption>
-            id="edit-group-members"
-            titleText={t('form.members')}
-            label={t('picker.members')}
-            items={userOptions}
-            selectedItems={userOptions.filter((o) => editForm.members.includes(o.id))}
-            onChange={({ selectedItems }) =>
-              setEditForm({ ...editForm, members: (selectedItems ?? []).map((o) => o.id) })
-            }
-          />
-          <MultiSelect<PickerOption>
-            id="edit-group-roles"
-            titleText={t('form.roles')}
-            label={t('picker.roles')}
-            items={roleOptions}
-            selectedItems={roleOptions.filter((o) => editForm.roles.includes(o.id))}
-            onChange={({ selectedItems }) =>
-              setEditForm({ ...editForm, roles: (selectedItems ?? []).map((o) => o.id) })
-            }
-          />
-          {editError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.save')}
-              subtitle={editError}
-              lowContrast
-              hideCloseButton
+          <Field label={t('form.name')} htmlFor="edit-group-name">
+            <Input
+              id="edit-group-name"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
             />
-          )}
+          </Field>
+          <Field label={t('form.description')} htmlFor="edit-group-description">
+            <Input.TextArea
+              id="edit-group-description"
+              rows={3}
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.members')} htmlFor="edit-group-members">
+            <Select
+              id="edit-group-members"
+              mode="multiple"
+              allowClear
+              placeholder={t('picker.members')}
+              options={pickerOptions(userOptions)}
+              value={editForm.members}
+              onChange={(members: string[]) => setEditForm({ ...editForm, members })}
+              optionFilterProp="label"
+            />
+          </Field>
+          <Field label={t('form.roles')} htmlFor="edit-group-roles">
+            <Select
+              id="edit-group-roles"
+              mode="multiple"
+              allowClear
+              placeholder={t('picker.roles')}
+              options={pickerOptions(roleOptions)}
+              value={editForm.roles}
+              onChange={(roles: string[]) => setEditForm({ ...editForm, roles })}
+              optionFilterProp="label"
+            />
+          </Field>
+          {editError && <Alert type="error" showIcon title={t('error.save')} description={editError} />}
         </div>
       </Modal>
 
       {/* Delete */}
       <Modal
-        danger
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
         <p className="groups-page__confirm-text">
           {t('deleteConfirm', { name: deleteTarget?.name })}
         </p>
-        {deleteError && (
-          <InlineNotification
-            kind="error"
-            title={t('error.delete')}
-            subtitle={deleteError}
-            lowContrast
-            hideCloseButton
-          />
-        )}
+        {deleteError && <Alert type="error" showIcon title={t('error.delete')} description={deleteError} />}
       </Modal>
-    </Grid>
+    </div>
   )
 }

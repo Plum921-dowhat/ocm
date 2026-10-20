@@ -1,36 +1,24 @@
 import { useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  ComboBox,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
   Select,
-  SelectItem,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-  TextInput,
-  type DataTableHeader,
-} from '@carbon/react'
-import { Add } from '@carbon/icons-react'
+  type TableColumnsType,
+  DatePicker
+} from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import type { Checkin, OfferingView, Paged, SessionView } from '../types/api'
 import { CheckinStatusTag, formatDateTime, type PickerOption } from './attendanceUi'
 
@@ -39,15 +27,6 @@ export default function AttendancePage() {
   const { token, can } = useAuth()
   const navigate = useNavigate()
   const canManage = can('attendance:manage')
-
-  const headers: DataTableHeader[] = [
-    { key: 'title', header: t('list.field.title') },
-    { key: 'offering', header: t('list.field.offering') },
-    { key: 'sessionText', header: t('list.field.sessionText') },
-    { key: 'status', header: t('list.field.status') },
-    { key: 'counts', header: t('list.field.counts') },
-    { key: 'startsAt', header: t('list.field.startsAt') },
-  ]
 
   const [statusFilter, setStatusFilter] = useState('')
   const [from, setFrom] = useState('')
@@ -58,10 +37,6 @@ export default function AttendancePage() {
     extraParams: { status: statusFilter, from, to },
   })
   const { loading } = list
-
-  // Carbon DataTable keys rows by a string id; the API's numeric id becomes
-  // its string form so the original item can be found again per row.
-  const tableRows = list.items.map((c) => ({ ...c, id: String(c.id) }))
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -98,11 +73,12 @@ export default function AttendancePage() {
     loadOfferings()
   }
 
-  const handlePickOffering = (e: { selectedItem?: PickerOption | null }) => {
-    setPickOffering(e.selectedItem ?? null)
+  const handlePickOffering = (value?: string) => {
+    const next = offerings.find((o) => o.id === value) ?? null
+    setPickOffering(next)
     setPickSession(null)
     setSessions([])
-    if (e.selectedItem) loadSessions(e.selectedItem.id)
+    if (next) loadSessions(next.id)
   }
 
   const loadSessions = async (offeringId: string) => {
@@ -170,204 +146,243 @@ export default function AttendancePage() {
   const countsText = (c: Checkin) =>
     `${c.counts.expected} / ${c.counts.present} / ${c.counts.late} / ${c.counts.absent} / ${c.counts.leave}`
 
-  return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.attendance')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('list.title')}</h1>
-        <p className="courses-page__subtitle">{t('list.subtitle')}</p>
-      </Column>
-
-      <Column sm={4} md={8} lg={16}>
-        {list.error && (
-          <InlineNotification
-            kind="error"
-            title={t('list.error.load')}
-            subtitle={list.error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-        {closeError && (
-          <InlineNotification
-            kind="error"
-            title={t('list.error.close')}
-            subtitle={closeError}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-
-        <DataTable rows={tableRows} headers={headers}>
-          {({ rows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-            <TableContainer title={t('list.table.title')} description={t('list.table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('list.searchPlaceholder')} />
-                  <Select
-                    id="att-status"
-                    labelText={t('list.filter.status')}
-                    hideLabel
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <SelectItem value="" text={t('list.filter.allStatuses')} />
-                    <SelectItem value="active" text={t('list.filter.active')} />
-                    <SelectItem value="closed" text={t('list.filter.closed')} />
-                  </Select>
-                  <TextInput id="att-from" labelText={t('list.filter.from')} hideLabel type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-                  <TextInput id="att-to" labelText={t('list.filter.to')} hideLabel type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-                  {canManage && (
-                    <Button renderIcon={Add} size="sm" onClick={openCreate}>
-                      {t('list.addButton')}
-                    </Button>
-                  )}
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('list.field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>{t('list.empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>
-                        {list.q || statusFilter || from || to ? t('list.empty.search') : t('list.empty.none')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const c = list.items.find((x) => String(x.id) === String(row.id))
-                      if (!c) return null
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          <TableCell>{c.title}</TableCell>
-                          <TableCell>
-                            {c.courseName ? `${c.courseName} / ${c.teachingClassName}` : t('list.noOffering')}
-                          </TableCell>
-                          <TableCell>{c.sessionText || '-'}</TableCell>
-                          <TableCell>
-                            <CheckinStatusTag status={c.status} />
-                          </TableCell>
-                          <TableCell>{countsText(c)}</TableCell>
-                          <TableCell>{formatDateTime(c.startsAt)}</TableCell>
-                          <TableCell>
-                            <div className="courses-page__actions">
-                              <Button kind="ghost" size="sm" onClick={() => navigate(`/attendance/${c.id}`)}>
-                                {t('list.action.detail')}
-                              </Button>
-                              {canManage && c.status === 'active' && (
-                                <Button kind="ghost" size="sm" onClick={() => handleClose(c)}>
-                                  {t('list.action.close')}
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+  const columns: TableColumnsType<Checkin> = [
+    { title: t('list.field.title'), dataIndex: 'title', width: 180 },
+    {
+      title: t('list.field.offering'),
+      key: 'offering',
+      width: 220,
+      render: (_, c) => (c.courseName ? `${c.courseName} / ${c.teachingClassName}` : t('list.noOffering')),
+    },
+    {
+      title: t('list.field.sessionText'),
+      dataIndex: 'sessionText',
+      width: 200,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: t('list.field.status'),
+      dataIndex: 'status',
+      width: 110,
+      render: (value: string) => <CheckinStatusTag status={value} />,
+    },
+    {
+      title: t('list.field.counts'),
+      key: 'counts',
+      width: 180,
+      render: (_, c) => countsText(c),
+    },
+    {
+      title: t('list.field.startsAt'),
+      dataIndex: 'startsAt',
+      width: 170,
+      render: (value: string) => formatDateTime(value),
+    },
+    {
+      title: t('list.field.actions'),
+      key: 'actions',
+      width: 160,
+      fixed: 'right',
+      render: (_, c) => (
+        <div className="courses-page__actions">
+          <Button type="text" size="small" onClick={() => navigate(`/attendance/${c.id}`)}>
+            {t('list.action.detail')}
+          </Button>
+          {canManage && c.status === 'active' && (
+            <Button type="text" size="small" onClick={() => handleClose(c)}>
+              {t('list.action.close')}
+            </Button>
           )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+        </div>
+      ),
+    },
+  ]
+
+  return (
+    <div className="courses-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.attendance') },
+        ]}
+      />
+      <h1 className="courses-page__heading">{t('list.title')}</h1>
+      <p className="courses-page__subtitle">{t('list.subtitle')}</p>
+
+      {list.error && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('list.error.load')}
+          description={list.error}
+          className="courses-page__notice"
         />
-      </Column>
+      )}
+      {closeError && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('list.error.close')}
+          description={closeError}
+          className="courses-page__notice"
+        />
+      )}
+
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('list.table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('list.table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('list.searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
+        />
+        <Select
+          id="att-status"
+          aria-label={t('list.filter.status')}
+          style={{ width: 160 }}
+          value={statusFilter}
+          onChange={(value: string) => setStatusFilter(value)}
+          options={[
+            { value: '', label: t('list.filter.allStatuses') },
+            { value: 'active', label: t('list.filter.active') },
+            { value: 'closed', label: t('list.filter.closed') },
+          ]}
+        />
+        <DatePicker
+          id="att-from"
+          aria-label={t('list.filter.from')}
+          allowClear={false}
+          style={{ width: 160 }}
+          value={from ? dayjs(from) : null}
+          onChange={(d) => setFrom(d ? d.format('YYYY-MM-DD') : '')}
+        />
+        <DatePicker
+          id="att-to"
+          aria-label={t('list.filter.to')}
+          allowClear={false}
+          style={{ width: 160 }}
+          value={to ? dayjs(to) : null}
+          onChange={(d) => setTo(d ? d.format('YYYY-MM-DD') : '')}
+        />
+        {canManage && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            {t('list.addButton')}
+          </Button>
+        )}
+      </div>
+
+      <Table<Checkin>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1200 }}
+        locale={{
+          emptyText: list.q || statusFilter || from || to ? t('list.empty.search') : t('list.empty.none'),
+        }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('list.modal.create')}
-        primaryButtonText={t('list.modal.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
-        size="lg"
+        title={t('list.modal.create')}
+        okText={t('list.modal.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        width={720}
+        destroyOnHidden
       >
         <div className="courses-page__form">
-          <ComboBox
-            id="att-offering"
-            titleText={t('list.form.offering')}
-            placeholder={t('list.form.offeringPlaceholder')}
-            items={offerings}
-            itemToString={(item) => (item ? item.text : '')}
-            selectedItem={pickOffering}
-            onChange={handlePickOffering}
-            shouldFilterItem={() => true}
-            helperText={t('list.form.offeringHelper')}
-          />
-          {pickOffering && (
-            <ComboBox
-              id="att-session"
-              titleText={t('list.form.session')}
-              placeholder={t('list.form.sessionPlaceholder')}
-              items={sessions}
-              itemToString={(item) => (item ? item.text : '')}
-              selectedItem={pickSession}
-              onChange={(e) => setPickSession(e.selectedItem ?? null)}
-              shouldFilterItem={() => true}
-              helperText={t('list.form.sessionHelper')}
+          <Field
+            label={t('list.form.offering')}
+            htmlFor="att-offering"
+            hint={t('list.form.offeringHelper')}
+          >
+            <Select
+              id="att-offering"
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              placeholder={t('list.form.offeringPlaceholder')}
+              value={pickOffering?.id}
+              onChange={handlePickOffering}
+              options={offerings.map((o) => ({ value: o.id, label: o.text }))}
             />
+          </Field>
+          {pickOffering && (
+            <Field
+              label={t('list.form.session')}
+              htmlFor="att-session"
+              hint={t('list.form.sessionHelper')}
+            >
+              <Select
+                id="att-session"
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                placeholder={t('list.form.sessionPlaceholder')}
+                value={pickSession?.id}
+                onChange={(value?: string) => setPickSession(sessions.find((s) => s.id === value) ?? null)}
+                options={sessions.map((s) => ({ value: s.id, label: s.text }))}
+              />
+            </Field>
           )}
-          <TextInput
-            id="att-title"
-            labelText={t('list.form.title')}
-            placeholder={t('list.form.titlePlaceholder')}
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-          />
-          <TextInput
-            id="att-late"
-            labelText={t('list.form.lateMinutes')}
-            type="number"
-            value={form.lateMinutes}
-            onChange={(e) => setForm({ ...form, lateMinutes: e.target.value })}
-          />
-          <TextInput
-            id="att-duration"
-            labelText={t('list.form.duration')}
-            type="number"
-            placeholder={t('list.form.durationPlaceholder')}
-            value={form.durationMinute}
-            onChange={(e) => setForm({ ...form, durationMinute: e.target.value })}
-          />
+          <Field label={t('list.form.title')} htmlFor="att-title">
+            <Input
+              id="att-title"
+              placeholder={t('list.form.titlePlaceholder')}
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+            />
+          </Field>
+          <Field label={t('list.form.lateMinutes')} htmlFor="att-late">
+            <Input
+              id="att-late"
+              type="number"
+              value={form.lateMinutes}
+              onChange={(e) => setForm({ ...form, lateMinutes: e.target.value })}
+            />
+          </Field>
+          <Field label={t('list.form.duration')} htmlFor="att-duration">
+            <Input
+              id="att-duration"
+              type="number"
+              placeholder={t('list.form.durationPlaceholder')}
+              value={form.durationMinute}
+              onChange={(e) => setForm({ ...form, durationMinute: e.target.value })}
+            />
+          </Field>
           {createError && (
-            <InlineNotification kind="error" title={t('list.error.create')} subtitle={createError} lowContrast hideCloseButton />
+            <Alert type="error" showIcon title={t('list.error.create')} description={createError} />
           )}
         </div>
       </Modal>
-    </Grid>
+    </div>
   )
 }

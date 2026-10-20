@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, InlineNotification, Modal, Select, SelectItem } from '@carbon/react'
-import { ChevronLeft, ChevronRight } from '@carbon/icons-react'
+import { Alert, Button, Modal, Select } from 'antd'
+import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 import TimetableGrid, { type TimetableSelection } from './TimetableGrid'
+import Field from '../ui/Field'
 import { addDays, fmt, mondayOf, parseDate } from '../utils/date'
 import type { Classroom, SessionView, TimetableDay } from '../types/api'
 
@@ -192,44 +193,52 @@ export default function TimetablePickerModal({
   return (
     <Modal
       open={open}
-      modalHeading={t('picker.title')}
-      primaryButtonText={t('picker.apply')}
-      primaryButtonDisabled={!selection || loading}
-      secondaryButtonText={t('action.cancel', { ns: 'common' })}
-      onRequestClose={onClose}
-      onRequestSubmit={apply}
-      size="lg"
-      hasScrollingContent
+      title={t('picker.title')}
+      okText={t('picker.apply')}
+      cancelText={t('action.cancel', { ns: 'common' })}
+      onCancel={onClose}
+      onOk={apply}
+      okButtonProps={{ disabled: !selection || loading }}
+      width={720}
       className="timetable-picker"
+      destroyOnHidden
     >
       <p className="timetable-picker__hint">{t('picker.hint')}</p>
       <div className="timetable__controls">
-        <Select
-          id="tt-picker-classroom"
-          labelText={t('filter.classroom')}
-          value={classroomId}
-          onChange={(e) => setClassroomId(e.target.value)}
-          className="timetable__select"
-        >
-          <SelectItem value="" text={t('filter.selectClassroom')} />
-          {classrooms.map((c) => (
-            <SelectItem
-              key={c.id}
-              value={String(c.id)}
-              text={c.building ? t('filter.classroomOption', { name: c.name, building: c.building }) : c.name}
-            />
-          ))}
-        </Select>
+        <Field label={t('filter.classroom')} htmlFor="tt-picker-classroom" className="timetable__select">
+          <Select
+            id="tt-picker-classroom"
+            value={classroomId || undefined}
+            placeholder={t('filter.selectClassroom')}
+            onChange={(value: string) => setClassroomId(value)}
+            options={classrooms.map((c) => ({
+              value: String(c.id),
+              label: c.building ? t('filter.classroomOption', { name: c.name, building: c.building }) : c.name,
+            }))}
+          />
+        </Field>
         <div className="timetable__week">
-          <Button kind="ghost" size="sm" hasIconOnly renderIcon={ChevronLeft} iconDescription={t('weekNav.prev')} onClick={() => setWeekStart(addDays(weekStart, -7))} />
+          <Button
+            type="text"
+            size="small"
+            aria-label={t('weekNav.prev')}
+            icon={<LeftOutlined />}
+            onClick={() => setWeekStart(addDays(weekStart, -7))}
+          />
           <span className="timetable__week-label">
             {from} ~ {to}
             {loading && <span className="timetable-picker__loading">{t('empty.loading')}</span>}
           </span>
-          <Button kind="ghost" size="sm" hasIconOnly renderIcon={ChevronRight} iconDescription={t('weekNav.next')} onClick={() => setWeekStart(addDays(weekStart, 7))} />
+          <Button
+            type="text"
+            size="small"
+            aria-label={t('weekNav.next')}
+            icon={<RightOutlined />}
+            onClick={() => setWeekStart(addDays(weekStart, 7))}
+          />
         </div>
       </div>
-      {error && <InlineNotification kind="error" title={t('error.load')} subtitle={error} lowContrast hideCloseButton />}
+      {error && <Alert type="error" showIcon title={t('error.load')} description={error} />}
       {!classroomId ? (
         <p>{t('empty.selectClassroom')}</p>
       ) : days.length === 0 && loading ? (

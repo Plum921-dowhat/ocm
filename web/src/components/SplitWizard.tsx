@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, InlineNotification, Tag, type TagProps } from '@carbon/react'
+import { Alert, Button, Tag } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../auth/api'
 import ImportPreviewTable from './ImportPreviewTable'
@@ -146,17 +146,16 @@ export default function SplitWizard({ jobs, stats, warnings, token, onExit, onVi
   if (finished) {
     return (
       <div className="imports-page__split-result">
-        <InlineNotification
-          kind="success"
+        <Alert
+          type="success"
+          showIcon
           title={t('wizard.doneTitle')}
-          subtitle={t('wizard.doneSubtitle')}
-          lowContrast
-          hideCloseButton
+          description={t('wizard.doneSubtitle')}
           className="imports-page__upload-err"
         />
         <div style={{ display: 'flex', gap: '.5rem', marginTop: '.5rem' }}>
-          <Button size="sm" onClick={onViewJobs}>{t('wizard.viewJobs')}</Button>
-          <Button kind="ghost" size="sm" onClick={onExit}>{t('wizard.splitAgain')}</Button>
+          <Button type="primary" size="small" onClick={onViewJobs}>{t('wizard.viewJobs')}</Button>
+          <Button type="text" size="small" onClick={onExit}>{t('wizard.splitAgain')}</Button>
         </div>
       </div>
     )
@@ -181,8 +180,8 @@ export default function SplitWizard({ jobs, stats, warnings, token, onExit, onVi
     return 'todo'
   }
 
-  const tagType: Record<'done' | 'active' | 'todo' | 'skipped' | 'failed', TagProps<'div'>['type']> = {
-    done: 'green', active: 'blue', todo: 'gray', skipped: 'gray', failed: 'red',
+  const tagColor: Record<'done' | 'active' | 'todo' | 'skipped' | 'failed', string> = {
+    done: 'green', active: 'blue', todo: 'default', skipped: 'default', failed: 'red',
   }
 
   // 扁平化导入（教学班/作息制度）的后端计数单位是组而非文件行，汇总行按类型带单位。
@@ -208,10 +207,11 @@ export default function SplitWizard({ jobs, stats, warnings, token, onExit, onVi
       </div>
 
       <div className="imports-page__split-result" style={{ marginBottom: '1rem' }}>
-        <InlineNotification
-          kind="success"
+        <Alert
+          type="success"
+          showIcon
           title={t('split.successTitle', { count: steps.length })}
-          subtitle={t('split.successSubtitle', {
+          description={t('split.successSubtitle', {
             classrooms: stats?.classrooms ?? 0,
             catalogCourses: stats?.catalogCourses ?? 0,
             adminClasses: stats?.adminClasses ?? 0,
@@ -222,8 +222,6 @@ export default function SplitWizard({ jobs, stats, warnings, token, onExit, onVi
             skippedParallel: stats?.skippedParallel ?? 0,
             noTeacherFilled: stats?.noTeacherFilled ?? 0,
           })}
-          lowContrast
-          hideCloseButton
           className="imports-page__upload-err"
         />
         {warnList.length > 0 && (
@@ -245,7 +243,7 @@ export default function SplitWizard({ jobs, stats, warnings, token, onExit, onVi
         {steps.map((s, k) => {
           const st = stepState(k)
           return (
-            <Tag key={s.id} type={tagType[st]} size="sm">
+            <Tag key={s.id} color={tagColor[st]}>
               {k + 1}. {typeLabel(s.type)}
               {st === 'skipped' ? `（${t('wizard.skippedTag')}）` : ''}
             </Tag>
@@ -255,25 +253,25 @@ export default function SplitWizard({ jobs, stats, warnings, token, onExit, onVi
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', flexWrap: 'wrap', margin: '.5rem 0' }}>
         <div style={{ display: 'flex', gap: '.5rem' }}>
-          <Button kind="ghost" size="sm" onClick={handleReanalyze} disabled={busy || !job || job.status !== 'preview'}>
+          <Button type="text" size="small" onClick={handleReanalyze} disabled={busy || !job || job.status !== 'preview'}>
             {t('wizard.refresh')}
           </Button>
-          <Button kind="ghost" size="sm" onClick={() => { if (!busy) onExit() }} disabled={busy}>
+          <Button type="text" size="small" onClick={() => { if (!busy) onExit() }} disabled={busy}>
             {t('wizard.exit')}
           </Button>
         </div>
         <div style={{ display: 'flex', gap: '.5rem' }}>
           {notResolved && (
-            <Button kind="ghost" size="sm" onClick={handleSkip} disabled={busy}>
+            <Button type="text" size="small" onClick={handleSkip} disabled={busy}>
               {t('wizard.skip')}
             </Button>
           )}
           {notResolved ? (
-            <Button size="sm" onClick={handleCommit} disabled={busy || (r !== 'failed' && (job?.succeededRows ?? 0) === 0)}>
+            <Button type="primary" size="small" onClick={handleCommit} disabled={busy || (r !== 'failed' && (job?.succeededRows ?? 0) === 0)}>
               {r === 'failed' ? t('wizard.retry') : t('modal.commit')}
             </Button>
           ) : (
-            <Button size="sm" onClick={handleNext} disabled={busy}>
+            <Button type="primary" size="small" onClick={handleNext} disabled={busy}>
               {isLast ? t('wizard.finish') : t('wizard.next')}
             </Button>
           )}
@@ -281,30 +279,27 @@ export default function SplitWizard({ jobs, stats, warnings, token, onExit, onVi
       </div>
 
       {r === 'skipped' && (
-        <InlineNotification
-          kind="info"
+        <Alert
+          type="info"
+          showIcon
           title={t('wizard.skippedNote')}
-          lowContrast
-          hideCloseButton
           className="imports-page__upload-err"
         />
       )}
       {r === 'failed' && (
-        <InlineNotification
-          kind="error"
+        <Alert
+          type="error"
+          showIcon
           title={t('wizard.failedNote')}
-          lowContrast
-          hideCloseButton
           className="imports-page__upload-err"
         />
       )}
       {error && (
-        <InlineNotification
-          kind="error"
+        <Alert
+          type="error"
+          showIcon
           title={t('error.action')}
-          subtitle={error}
-          lowContrast
-          hideCloseButton
+          description={error}
           className="imports-page__upload-err"
         />
       )}

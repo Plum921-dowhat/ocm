@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Button, InlineNotification, Modal } from '@carbon/react'
-import { Add, Edit, Restart, TrashCan } from '@carbon/icons-react'
+import { Alert, Button, Modal } from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
@@ -86,11 +86,11 @@ export default function SessionsMiniTable({
       <div className="sessions-mini__bar">
         <span className="sessions-mini__title">{t('sessionsExpanded.title', { count: entry.data.length })}</span>
         {canManage && (
-          <Button size="sm" renderIcon={Add} onClick={openAdd}>
+          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openAdd}>
             {t('sessionsExpanded.add')}
           </Button>
         )}
-        <Button size="sm" kind="ghost" onClick={() => onViewAll(offering.id)}>
+        <Button type="text" size="small" onClick={() => onViewAll(offering.id)}>
           {t('sessionsExpanded.viewAll')}
         </Button>
       </div>
@@ -103,7 +103,7 @@ export default function SessionsMiniTable({
           <span>
             {t('sessionsExpanded.loadError')}: {entry.error}
           </span>
-          <Button size="sm" kind="ghost" renderIcon={Restart} onClick={() => onReload(offering.id)}>
+          <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => onReload(offering.id)}>
             {t('sessionsExpanded.retry')}
           </Button>
         </div>
@@ -130,19 +130,18 @@ export default function SessionsMiniTable({
                   <td>
                     <div className="sessions-mini__actions">
                       <Button
-                        kind="ghost"
-                        size="sm"
-                        hasIconOnly
-                        renderIcon={Edit}
-                        iconDescription={t('action.edit', { ns: 'common' })}
+                        type="text"
+                        size="small"
+                        aria-label={t('action.edit', { ns: 'common' })}
+                        icon={<EditOutlined />}
                         onClick={() => openEdit(s)}
                       />
                       <Button
-                        kind="ghost"
-                        size="sm"
-                        hasIconOnly
-                        renderIcon={TrashCan}
-                        iconDescription={t('action.delete', { ns: 'common' })}
+                        type="text"
+                        size="small"
+                        danger
+                        aria-label={t('action.delete', { ns: 'common' })}
+                        icon={<DeleteOutlined />}
                         onClick={() => {
                           setDelError('')
                           setDelTarget(s)
@@ -161,7 +160,7 @@ export default function SessionsMiniTable({
         <p className="sessions-mini__hint">
           {t('sessionsExpanded.empty')}
           {canManage && (
-            <Button size="sm" kind="ghost" renderIcon={Add} onClick={openAdd}>
+            <Button type="text" size="small" icon={<PlusOutlined />} onClick={openAdd}>
               {t('sessionsExpanded.add')}
             </Button>
           )}
@@ -179,14 +178,15 @@ export default function SessionsMiniTable({
       />
 
       <Modal
-        danger
         open={Boolean(delTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDelTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDelTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
         <p className="courses-page__confirm-text">
           {t('sessionModal.deleteConfirm', {
@@ -195,7 +195,7 @@ export default function SessionsMiniTable({
             classroom: delTarget?.classroomName ?? '',
           })}
         </p>
-        {delError && <InlineNotification kind="error" title={t('error.delete')} subtitle={delError} lowContrast hideCloseButton />}
+        {delError && <Alert type="error" showIcon title={t('error.delete')} description={delError} />}
       </Modal>
     </div>
   )

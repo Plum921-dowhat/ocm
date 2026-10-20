@@ -1,37 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  Column,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
   Slider,
   Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   Tag,
-  TextArea,
-  TextInput,
-  type TagProps,
-} from '@carbon/react'
+  type TableColumnsType,
+} from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch, apiStream } from '../auth/api'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import { formatDateTime } from '../i18n/formatters'
 import type { IotDevice, IotDeviceEvent } from '../types/api'
 
-const STATUS_KIND: Record<string, TagProps<'div'>['type']> = {
+const STATUS_COLOR: Record<string, string> = {
   pending: 'blue',
   online: 'green',
-  offline: 'gray',
+  offline: 'default',
 }
 
 // The command types the console renders as dedicated buttons; they are part
@@ -237,14 +229,12 @@ export default function IotDeviceDetailPage() {
 
   if (notFound) {
     return (
-      <Grid fullWidth className="classrooms-page">
-        <Column sm={4} md={8} lg={16}>
-          <InlineNotification kind="error" title={t('error.load')} subtitle={t('detail.notFound')} lowContrast hideCloseButton />
-          <Button kind="ghost" onClick={() => navigate('/iot')}>
-            {t('breadcrumb.list')}
-          </Button>
-        </Column>
-      </Grid>
+      <div className="classrooms-page">
+        <Alert type="error" showIcon title={t('error.load')} description={t('detail.notFound')} />
+        <Button type="text" onClick={() => navigate('/iot')}>
+          {t('breadcrumb.list')}
+        </Button>
+      </div>
     )
   }
 
@@ -256,52 +246,101 @@ export default function IotDeviceDetailPage() {
   // everything else keeps the device-reported raw value — the console never
   // invents semantics the node did not declare.
   const renderFunctionState = (f: NodeFunction) => {
-    if (f.kind === 'door' && f.state === '1') return <Tag type="green" size="sm">{t('node.doorClosed')}</Tag>
-    if (f.kind === 'door' && f.state === '0') return <Tag type="red" size="sm">{t('node.doorOpened')}</Tag>
+    if (f.kind === 'door' && f.state === '1') return <Tag color="green">{t('node.doorClosed')}</Tag>
+    if (f.kind === 'door' && f.state === '0') return <Tag color="red">{t('node.doorOpened')}</Tag>
     if (f.kind === 'relay') {
-      return <Tag type={f.state === '1' ? 'green' : 'gray'} size="sm">{f.state === '1' ? t('node.on') : t('node.off')}</Tag>
+      return <Tag color={f.state === '1' ? 'green' : 'default'}>{f.state === '1' ? t('node.on') : t('node.off')}</Tag>
     }
-    if (f.state !== undefined) return <Tag size="sm">{f.state}</Tag>
-    return <Tag type="gray" size="sm">—</Tag>
+    if (f.state !== undefined) return <Tag>{f.state}</Tag>
+    return <Tag color="default">—</Tag>
   }
 
   const deviceName = device?.name || device?.externalId || `#${id}`
 
+  const attrRows = attrEntries.map(([k, v]) => ({
+    key: k,
+    name: k,
+    value: typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v),
+  }))
+  const attrColumns: TableColumnsType<(typeof attrRows)[number]> = [
+    { title: '#', dataIndex: 'name' },
+    { title: t('detail.attrs'), dataIndex: 'value' },
+  ]
+
+  const eventColumns: TableColumnsType<IotDeviceEvent> = [
+    {
+      title: t('field.type'),
+      dataIndex: 'type',
+      render: (value: string, e) => (
+        <>
+          {value}
+          {typeof e.payload?.function === 'string' ? ` · ${e.payload.function}` : ''}
+        </>
+      ),
+    },
+    {
+      title: t('field.payload'),
+      dataIndex: 'payload',
+      render: (value: IotDeviceEvent['payload']) => (value ? JSON.stringify(value) : '—'),
+    },
+    {
+      title: t('field.occurredAt'),
+      dataIndex: 'occurredAt',
+      render: (value: string) => formatDateTime(value),
+    },
+    {
+      title: t('field.receivedAt'),
+      dataIndex: 'receivedAt',
+      render: (value: string) => formatDateTime(value),
+    },
+  ]
+
   return (
-    <Grid fullWidth className="classrooms-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem
-            href="/iot"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/iot')
-            }}
-          >
-            {t('breadcrumb.list')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{deviceName}</BreadcrumbItem>
-        </Breadcrumb>
+    <div className="classrooms-page" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div>
+        <Breadcrumb
+          aria-label={t('aria.breadcrumb', { ns: 'common' })}
+          items={[
+            {
+              title: (
+                <a
+                  href="/"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    navigate('/')
+                  }}
+                >
+                  {t('breadcrumb.home')}
+                </a>
+              ),
+            },
+            {
+              title: (
+                <a
+                  href="/iot"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    navigate('/iot')
+                  }}
+                >
+                  {t('breadcrumb.list')}
+                </a>
+              ),
+            },
+            { title: deviceName },
+          ]}
+        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h1 className="classrooms-page__heading">{deviceName}</h1>
           {device && (
-            <Tag type={STATUS_KIND[device.status] ?? 'gray'} size="sm">
+            <Tag color={STATUS_COLOR[device.status] ?? 'default'}>
               {t('status.' + device.status, { defaultValue: device.status })}
             </Tag>
           )}
           {/* Node model (spec §11): the controller link is a node attr, distinct
               from registry presence (which is the gateway's uplink). */}
           {isNodeDevice(attrs) && typeof attrs.online === 'boolean' && (
-            <Tag type={attrs.online ? 'green' : 'red'} size="sm">
+            <Tag color={attrs.online ? 'green' : 'red'}>
               {t('node.online')}: {attrs.online ? t('node.onlineOn') : t('node.onlineOff')}
             </Tag>
           )}
@@ -311,50 +350,55 @@ export default function IotDeviceDetailPage() {
             ? `${device.externalId} · ${device.category} · ${t('field.sourceId')}: ${device.sourceId}`
             : ''}
         </p>
-      </Column>
+      </div>
 
-      <Column sm={4} md={8} lg={16}>
+      <div>
         {loadError && (
-          <InlineNotification kind="error" title={t('error.load')} subtitle={loadError} lowContrast hideCloseButton />
+          <Alert type="error" showIcon title={t('error.load')} description={loadError} />
         )}
         {device?.status === 'pending' && (
-          <InlineNotification
-            kind="info"
+          <Alert
+            type="info"
+            showIcon
             title={t('status.pending')}
-            subtitle={t('detail.pendingNotice')}
-            lowContrast
-            hideCloseButton
+            description={t('detail.pendingNotice')}
             className="classrooms-page__notice"
           />
         )}
         {commandSent && (
-          <InlineNotification
-            kind="success"
+          <Alert
+            type="success"
+            showIcon
             title={t('detail.commands')}
-            subtitle={commandSent}
-            lowContrast
-            hideCloseButton
+            description={commandSent}
             className="classrooms-page__notice"
           />
         )}
         {commandError && (
-          <InlineNotification kind="error" title={t('error.action')} subtitle={commandError} lowContrast hideCloseButton className="classrooms-page__notice" />
+          <Alert
+            type="error"
+            showIcon
+            title={t('error.action')}
+            description={commandError}
+            className="classrooms-page__notice"
+          />
         )}
-      </Column>
+      </div>
 
       {/* Commands — issuing one is a physical-world action gated by
           iot:control on the server; manage alone never issues any. Node-model
           devices only expose node-level buttons here (scenes); function
           commands live on the function cards below. */}
       {device && device.status !== 'pending' && canControl && (
-        <Column sm={4} md={8} lg={16}>
+        <div>
           <h3>{t('detail.commands')}</h3>
           <div className="classrooms-page__actions">
             {(isNodeDevice(attrs) ? NODE_COMMAND_BUTTONS : COMMAND_BUTTONS).map((type) => (
               <Button
                 key={type}
-                kind={type === 'door_open' ? 'danger--ghost' : 'ghost'}
-                size="sm"
+                type="text"
+                danger={type === 'door_open'}
+                size="small"
                 onClick={() => {
                   setCommandError('')
                   setCommandTarget({ type })
@@ -364,8 +408,8 @@ export default function IotDeviceDetailPage() {
               </Button>
             ))}
             <Button
-              kind="ghost"
-              size="sm"
+              type="text"
+              size="small"
               onClick={() => {
                 setCustomError('')
                 setCustomForm({ type: '', payload: '' })
@@ -375,11 +419,11 @@ export default function IotDeviceDetailPage() {
               {t('command.genericTitle')}
             </Button>
           </div>
-        </Column>
+        </div>
       )}
 
       {/* Latest attributes / classroom function cards (spec §11) */}
-      <Column sm={4} md={8} lg={16}>
+      <div>
         <h3>{isNodeDevice(attrs) ? t('node.functions') : t('detail.attrs')}</h3>
         {isNodeDevice(attrs) ? (
           <div className="iot-function-grid">
@@ -387,7 +431,7 @@ export default function IotDeviceDetailPage() {
               <div className="iot-function-card">
                 <div className="iot-function-card__head">
                   <span className="iot-function-card__title">{t('node.volume')}</span>
-                  <Tag size="sm" type={volumePending ? 'blue' : undefined}>
+                  <Tag color={volumePending ? 'blue' : undefined}>
                     {volumePending
                       ? `${volumeDraft ?? String(attrs.volume)} · ${t('node.volumePending')}`
                       : String(attrs.volume)}
@@ -395,19 +439,19 @@ export default function IotDeviceDetailPage() {
                 </div>
                 {canControl && (
                   <div className="iot-function-card__actions">
-                    <Slider
-                      id="iot-node-volume"
-                      labelText={t('node.volume')}
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={volumeDraft ?? (attrs.volume as number)}
-                      onChange={(data: { value: number }) => setVolumeDraft(data.value)}
-                      hideTextInput
-                    />
+                    <Field label={t('node.volume')} htmlFor="iot-node-volume">
+                      <Slider
+                        id="iot-node-volume"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={volumeDraft ?? (attrs.volume as number)}
+                        onChange={(value) => setVolumeDraft(value)}
+                      />
+                    </Field>
                     <Button
-                      kind="ghost"
-                      size="sm"
+                      type="text"
+                      size="small"
                       onClick={() => void sendVolume(volumeDraft ?? (attrs.volume as number))}
                     >
                       {t('command.volume_set')}
@@ -420,7 +464,7 @@ export default function IotDeviceDetailPage() {
               <div className="iot-function-card" key={key}>
                 <div className="iot-function-card__head">
                   <span className="iot-function-card__title">{key}</span>
-                  <Tag size="sm" type="cool-gray">
+                  <Tag color="default">
                     {t('node.kind.' + (f.kind ?? 'generic'), { defaultValue: f.kind ?? 'generic' })}
                   </Tag>
                 </div>
@@ -439,8 +483,9 @@ export default function IotDeviceDetailPage() {
                 {canControl && f.kind === 'door' && (
                   <div className="iot-function-card__actions">
                     <Button
-                      kind="danger--ghost"
-                      size="sm"
+                      type="text"
+                      danger
+                      size="small"
                       onClick={() => {
                         setCommandError('')
                         setCommandTarget({ type: 'door_open', payload: { function: key } })
@@ -449,8 +494,8 @@ export default function IotDeviceDetailPage() {
                       {t('command.door_open')}
                     </Button>
                     <Button
-                      kind="ghost"
-                      size="sm"
+                      type="text"
+                      size="small"
                       onClick={() => {
                         setCommandError('')
                         setCommandTarget({ type: 'door_close', payload: { function: key } })
@@ -463,8 +508,8 @@ export default function IotDeviceDetailPage() {
                 {canControl && f.kind === 'relay' && (
                   <div className="iot-function-card__actions">
                     <Button
-                      kind="ghost"
-                      size="sm"
+                      type="text"
+                      size="small"
                       onClick={() => {
                         setCommandError('')
                         setCommandTarget({ type: 'device_on', payload: { function: key } })
@@ -473,8 +518,8 @@ export default function IotDeviceDetailPage() {
                       {t('node.on')}
                     </Button>
                     <Button
-                      kind="ghost"
-                      size="sm"
+                      type="text"
+                      size="small"
                       onClick={() => {
                         setCommandError('')
                         setCommandTarget({ type: 'device_off', payload: { function: key } })
@@ -488,75 +533,36 @@ export default function IotDeviceDetailPage() {
             ))}
           </div>
         ) : (
-          <Table size="sm">
-            <TableHead>
-              <TableRow>
-                <TableHeader>#</TableHeader>
-                <TableHeader>{t('detail.attrs')}</TableHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {attrEntries.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={2}>{t('detail.attrsEmpty')}</TableCell>
-                </TableRow>
-              ) : (
-                attrEntries.map(([k, v]) => (
-                  <TableRow key={k}>
-                    <TableCell>{k}</TableCell>
-                    <TableCell>{typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <Table
+            size="small"
+            rowKey="key"
+            columns={attrColumns}
+            dataSource={attrRows}
+            pagination={false}
+            locale={{ emptyText: t('detail.attrsEmpty') }}
+          />
         )}
         {attrEntries.length > 0 && (
           <>
-            <Button kind="ghost" size="sm" onClick={() => setShowRaw((v) => !v)}>
+            <Button type="text" size="small" onClick={() => setShowRaw((v) => !v)}>
               {showRaw ? t('detail.hideRaw') : t('detail.showRaw')}
             </Button>
             {showRaw && <pre style={{ overflowX: 'auto' }}>{JSON.stringify(device?.state, null, 2)}</pre>}
           </>
         )}
-      </Column>
+      </div>
 
       {/* Events */}
-      <Column sm={4} md={8} lg={16}>
+      <div>
         <h3>{t('detail.events')}</h3>
-        <Table size="sm">
-          <TableHead>
-            <TableRow>
-              <TableHeader>{t('field.type')}</TableHeader>
-              <TableHeader>{t('field.payload')}</TableHeader>
-              <TableHeader>{t('field.occurredAt')}</TableHeader>
-              <TableHeader>{t('field.receivedAt')}</TableHeader>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {events.loading ? (
-              <TableRow>
-                <TableCell colSpan={4}>{t('empty.loading')}</TableCell>
-              </TableRow>
-            ) : events.items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4}>{t('empty.events')}</TableCell>
-              </TableRow>
-            ) : (
-              events.items.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell>
-                    {e.type}
-                    {typeof e.payload?.function === 'string' ? ` · ${e.payload.function}` : ''}
-                  </TableCell>
-                  <TableCell>{e.payload ? JSON.stringify(e.payload) : '—'}</TableCell>
-                  <TableCell>{formatDateTime(e.occurredAt)}</TableCell>
-                  <TableCell>{formatDateTime(e.receivedAt)}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        <Table<IotDeviceEvent>
+          size="small"
+          rowKey="id"
+          columns={eventColumns}
+          dataSource={events.items}
+          pagination={false}
+          locale={{ emptyText: events.loading ? t('empty.loading') : t('empty.events') }}
+        />
         <ListPagination
           page={events.page}
           pageSize={events.pageSize}
@@ -564,17 +570,18 @@ export default function IotDeviceDetailPage() {
           onPageChange={events.setPage}
           onPageSizeChange={events.setPageSize}
         />
-      </Column>
+      </div>
 
       {/* Known-command confirm dialog */}
       <Modal
         open={Boolean(commandTarget)}
-        modalHeading={t('modal.command')}
-        primaryButtonText={t('modal.commandSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCommandTarget(null)}
-        onRequestSubmit={() => commandTarget && void sendCommand(commandTarget.type, commandTarget.payload)}
-        primaryButtonDisabled={commandSending}
+        title={t('modal.command')}
+        okText={t('modal.commandSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCommandTarget(null)}
+        onOk={() => commandTarget && void sendCommand(commandTarget.type, commandTarget.payload)}
+        confirmLoading={commandSending}
+        destroyOnHidden
       >
         <p className="classrooms-page__confirm-text">
           {t('modal.commandLine', {
@@ -582,38 +589,41 @@ export default function IotDeviceDetailPage() {
             command: commandTarget ? t('command.' + commandTarget.type) : '',
           })}
         </p>
-        {commandError && <InlineNotification kind="error" title={t('error.action')} subtitle={commandError} lowContrast hideCloseButton />}
+        {commandError && <Alert type="error" showIcon title={t('error.action')} description={commandError} />}
       </Modal>
 
       {/* Custom-command dialog */}
       <Modal
         open={customOpen}
-        modalHeading={t('command.genericTitle')}
-        primaryButtonText={t('command.send')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCustomOpen(false)}
-        onRequestSubmit={handleCustomSend}
-        primaryButtonDisabled={customSending}
+        title={t('command.genericTitle')}
+        okText={t('command.send')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCustomOpen(false)}
+        onOk={handleCustomSend}
+        confirmLoading={customSending}
+        destroyOnHidden
       >
         <div className="classrooms-page__form">
-          <TextInput
-            id="iot-cmd-type"
-            labelText={t('command.typeLabel')}
-            placeholder={t('command.typePlaceholder')}
-            value={customForm.type}
-            onChange={(e) => setCustomForm({ ...customForm, type: e.target.value })}
-          />
-          <TextArea
-            id="iot-cmd-payload"
-            labelText={t('command.payloadLabel')}
-            placeholder={t('command.payloadPlaceholder')}
-            value={customForm.payload}
-            onChange={(e) => setCustomForm({ ...customForm, payload: e.target.value })}
-            rows={4}
-          />
-          {customError && <InlineNotification kind="error" title={t('error.action')} subtitle={customError} lowContrast hideCloseButton />}
+          <Field label={t('command.typeLabel')} htmlFor="iot-cmd-type">
+            <Input
+              id="iot-cmd-type"
+              placeholder={t('command.typePlaceholder')}
+              value={customForm.type}
+              onChange={(e) => setCustomForm({ ...customForm, type: e.target.value })}
+            />
+          </Field>
+          <Field label={t('command.payloadLabel')} htmlFor="iot-cmd-payload">
+            <Input.TextArea
+              id="iot-cmd-payload"
+              placeholder={t('command.payloadPlaceholder')}
+              value={customForm.payload}
+              onChange={(e) => setCustomForm({ ...customForm, payload: e.target.value })}
+              rows={4}
+            />
+          </Field>
+          {customError && <Alert type="error" showIcon title={t('error.action')} description={customError} />}
         </div>
       </Modal>
-    </Grid>
+    </div>
   )
 }

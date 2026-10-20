@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { apiFetch } from './api'
+import { clearChatSession } from '../ai/chatStore'
 import type { CurrentUser, LoginResponse, PermissionCode } from '../types/api'
 
 const TOKEN_KEY = 'ocm.token'
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    clearChatSession()
     localStorage.removeItem(TOKEN_KEY)
     setToken(null)
     setUser(null)

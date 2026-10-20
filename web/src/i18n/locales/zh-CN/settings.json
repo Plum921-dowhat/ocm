@@ -1,14 +1,25 @@
 {
-  "breadcrumb": { "home": "首页", "current": "参数配置" },
+  "breadcrumb": {
+    "home": "首页",
+    "current": "参数配置"
+  },
   "title": "参数配置",
   "subtitle": "邮件、对象存储与 AI 助手服务配置，仅系统管理员可查看和修改。",
-  "error": { "action": "操作失败" },
+  "error": {
+    "action": "操作失败"
+  },
   "saveButton": "保存配置",
-  "placeholder": { "set": "已设置，留空保持不变", "unset": "未设置" },
-  "secret": { "show": "显示密钥", "hide": "隐藏密钥" },
+  "placeholder": {
+    "set": "已设置，留空保持不变",
+    "unset": "未设置"
+  },
+  "secret": {
+    "show": "显示密钥",
+    "hide": "隐藏密钥"
+  },
   "appearance": {
     "heading": "外观",
-    "hint": "选择界面的 Carbon 色彩主题，或跟随操作系统的深浅色偏好。仅保存在本浏览器。",
+    "hint": "选择界面主题，或跟随操作系统的深浅色偏好。仅保存在本浏览器。",
     "label": "主题"
   },
   "mail": {
@@ -27,7 +38,9 @@
     "encryption": "加密方式",
     "encryptionSsl": "SSL",
     "encryptionStarttls": "STARTTLS",
-    "encryptionNone": "不加密"
+    "encryptionNone": "不加密",
+    "portHint": "SSL 通常为 465，STARTTLS 通常为 587",
+    "passwordHint": "留空表示不修改已保存的密码"
   },
   "storage": {
     "heading": "对象存储",
@@ -41,7 +54,11 @@
     "secretKey": "SecretKey",
     "useSsl": "使用 HTTPS",
     "usePathStyle": "Path-Style 访问（兼容 MinIO 等自托管）",
-    "publicBaseUrl": "公开访问地址（可选）"
+    "publicBaseUrl": "公开访问地址（可选）",
+    "endpointHint": "不含协议前缀，例如 cos.ap-guangzhou.myqcloud.com",
+    "publicBaseUrlHint": "用于生成可公开访问的文件地址",
+    "useSslHint": "对象存储服务是否通过 HTTPS 访问",
+    "usePathStyleHint": "MinIO 等自建服务通常需要开启"
   },
   "ai": {
     "heading": "AI 助手",
@@ -50,6 +67,14 @@
     "enabledLabel": "启用 AI 助手",
     "baseUrl": "API 地址 (Base URL)",
     "model": "模型名称",
-    "apiKey": "API 密钥"
-  }
+    "apiKey": "API 密钥",
+    "apiKeyHint": "留空表示不修改已保存的密钥"
+  },
+  "status": {
+    "enabled": "已启用",
+    "disabled": "未启用"
+  },
+  "unsavedHint": "有未保存的修改",
+  "savedHint": "已是最新配置",
+  "readonlyBadge": "只读"
 }

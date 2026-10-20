@@ -1,18 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Alert, Button, Checkbox, Dropdown, Input, Select, type InputRef } from 'antd'
 import {
-  Button,
-  Checkbox,
-  Dropdown,
-  InlineNotification,
-  OverflowMenu,
-  OverflowMenuItem,
-  PasswordInput,
-  TextInput,
-} from '@carbon/react'
-import { ArrowRight, Document, Edit, Translate } from '@carbon/icons-react'
+  ArrowRightOutlined,
+  EditOutlined,
+  FileTextOutlined,
+  TranslationOutlined,
+} from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
+import { describeLoginFailure, type LoginFailure } from '../auth/loginError'
 import useLanguage from '../i18n/useLanguage'
 import logoUrl from '../assets/logo.png'
 import wechatIconUrl from '../assets/wechat-icon.png'
@@ -26,11 +23,8 @@ const REMEMBER_KEY = 'ocm.remembered-id'
 
 const displayOnly = (event: MouseEvent) => event.preventDefault()
 
-// Dropdown option shape for the sign-in realm picker.
-interface RealmItem {
-  id: string
-  label: string
-}
+// Sign-in realm options for the two-step form's leading select.
+const REALM_KEYS = ['email'] as const
 
 function WeChatIcon({ className }: { className?: string }) {
   return (
@@ -49,23 +43,26 @@ type Step = 'id' | 'password'
 
 export default function LoginPage() {
   const { t } = useTranslation('login')
-  const { languages, setLanguage } = useLanguage()
+  const { languages, setLanguage, language } = useLanguage()
   const { user, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const realmItems: RealmItem[] = [{ id: 'Email', label: t('email') }]
-
   const [step, setStep] = useState<Step>('id')
+  const [realm, setRealm] = useState<string>('email')
   const [username, setUsername] = useState(() => localStorage.getItem(REMEMBER_KEY) || '')
   const [password, setPassword] = useState('')
   const [rememberId, setRememberId] = useState(() => Boolean(localStorage.getItem(REMEMBER_KEY)))
   const [idError, setIdError] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  // Server-side failures are a single structured value (headline + detail
+  // derived from the same HTTP status) instead of a bare string rendered next
+  // to a hard-coded headline - that split is what let the text and the cause
+  // disagree. See auth/loginError.ts.
+  const [formError, setFormError] = useState<LoginFailure | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const passwordRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<InputRef>(null)
   useEffect(() => {
     if (step === 'password') {
       passwordRef.current?.focus()
@@ -78,30 +75,35 @@ export default function LoginPage() {
 
   const handleContinue = (event: FormEvent) => {
     event.preventDefault()
+    // One attempt may show at most one error: clear the previous attempt's
+    // server failure and field error before validating this one.
+    setFormError(null)
+    setIdError('')
     if (!username.trim()) {
       setIdError(t('enterId'))
       return
     }
-    setIdError('')
-    setError(null)
     setStep('password')
   }
 
   const handleBackToId = () => {
-    setError(null)
+    setFormError(null)
     setPasswordError('')
+    setIdError('')
     setStep('id')
   }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (submitting) return
+    // Same rule as handleContinue: a new submit discards the old failure
+    // before it can be shown next to the new one.
+    setFormError(null)
+    setPasswordError('')
     if (!password) {
       setPasswordError(t('enterPassword'))
       return
     }
-    setPasswordError('')
-    setError(null)
     setSubmitting(true)
     try {
       if (rememberId) {
@@ -114,15 +116,20 @@ export default function LoginPage() {
       const target = state?.from?.pathname || '/'
       navigate(target, { replace: true })
     } catch (err) {
-      setError((err as Error).message)
+      // Keep the raw cause for debugging, but only render copy that matches
+      // the status the server actually returned.
+      console.error('[login] sign-in failed:', err)
+      setFormError(describeLoginFailure(err, t))
     } finally {
       setSubmitting(false)
     }
   }
 
-  // The WeChat SSO button is decorative until the mini-program flow lands;
-  // renderIcon must return a component, so wrap the icon element.
-  const wechatRenderIcon = () => <WeChatIcon />
+  const langMenu = {
+    items: languages.map((lng) => ({ key: lng, label: t(`language.${lng}`, { ns: 'common' }) })),
+    selectedKeys: [language],
+    onClick: ({ key }: { key: string }) => setLanguage(key as never),
+  }
 
   return (
     <div className="login">
@@ -133,27 +140,19 @@ export default function LoginPage() {
         <nav className="login__nav" aria-label={t('docs')}>
           {docsUrl && (
             <a href={docsUrl} className="login__nav-item" target="_blank" rel="noreferrer">
-              <span className="login__nav-icon"><Document size={20} /></span>
+              <span className="login__nav-icon"><FileTextOutlined /></span>
               <span className="login__nav-text">{t('docs')}</span>
             </a>
           )}
-          <OverflowMenu
-            className="login__nav-item login__lang"
-            renderIcon={Translate}
-            aria-label={t('aria.languageSwitcher', { ns: 'common' })}
-            iconDescription={t('aria.languageSwitcher', { ns: 'common' })}
-            align="bottom-end"
-            flipped
-          >
-            {languages.map((lng) => (
-              <OverflowMenuItem
-                key={lng}
-                itemText={t(`language.${lng}`, { ns: 'common' })}
-                isDelete={false}
-                onClick={() => setLanguage(lng)}
-              />
-            ))}
-          </OverflowMenu>
+          <Dropdown menu={langMenu} trigger={['click']} placement="bottomRight">
+            <button
+              type="button"
+              className="login__nav-item login__lang"
+              aria-label={t('aria.languageSwitcher', { ns: 'common' })}
+            >
+              <TranslationOutlined />
+            </button>
+          </Dropdown>
         </nav>
       </header>
 
@@ -180,42 +179,45 @@ export default function LoginPage() {
                 <div className="login__label">{t('signInWith')}</div>
                 <div className="login__id-inputs">
                   <div className="login__realm">
-                    <Dropdown
+                    <Select
                       id="realm"
-                      label={t('signInWith')}
-                      // DropdownProps requires titleText (it renders a visible
-                      // <label> when non-empty); pass an empty string — the
-                      // page already renders its own .login__label above.
-                      titleText=""
                       aria-label={t('signInWith')}
-                      items={realmItems}
-                      selectedItem={realmItems[0]}
-                      size="lg"
-                      type="default"
+                      value={realm}
+                      onChange={setRealm}
+                      size="large"
+                      options={REALM_KEYS.map((key) => ({ value: key, label: t(key) }))}
                     />
                   </div>
                   <div className="login__userid">
-                    <TextInput
+                    <Input
                       id="userid"
-                      labelText={t('email')}
-                      hideLabel
+                      aria-label={t('email')}
                       placeholder={t('usernamePlaceholder')}
                       value={username}
                       onChange={(e) => {
                         setUsername(e.target.value)
                         if (idError) setIdError('')
+                        // A new attempt invalidates the previous failure.
+                        if (formError) setFormError(null)
                       }}
-                      invalid={Boolean(idError)}
-                      invalidText={idError}
+                      status={idError ? 'error' : undefined}
                       autoComplete="username"
-                      size="lg"
+                      size="large"
                       autoFocus
                       tabIndex={step === 'password' ? -1 : 0}
                     />
+                    {idError && <div className="login__field-error" role="alert">{idError}</div>}
                   </div>
                 </div>
                 <div className="login__button-row">
-                  <Button type="submit" kind="primary" size="lg" renderIcon={ArrowRight} className="login__primary-btn">
+                  <Button
+                    htmlType="submit"
+                    type="primary"
+                    size="large"
+                    className="login__primary-btn"
+                    icon={<ArrowRightOutlined />}
+                    iconPlacement="end"
+                  >
                     {t('continue')}
                   </Button>
                 </div>
@@ -225,18 +227,18 @@ export default function LoginPage() {
                   </a>
                   <Checkbox
                     id="remember-id"
-                    labelText={t('rememberId')}
                     checked={rememberId}
-                    onChange={(_, { checked }) => setRememberId(checked)}
+                    onChange={(e) => setRememberId(e.target.checked)}
                     tabIndex={step === 'password' ? -1 : 0}
-                  />
+                  >
+                    {t('rememberId')}
+                  </Checkbox>
                 </div>
                 <div className="login__separator">{t('or')}</div>
                 <Button
-                  kind="tertiary"
-                  size="lg"
-                  renderIcon={wechatRenderIcon}
+                  size="large"
                   className="login__sso-btn"
+                  icon={<WeChatIcon />}
                   onClick={displayOnly}
                   tabIndex={step === 'password' ? -1 : 0}
                 >
@@ -250,45 +252,47 @@ export default function LoginPage() {
                 noValidate
                 aria-hidden={step === 'id'}
               >
-                {error && (
-                  <InlineNotification
-                    kind="error"
-                    title={t('errorTitle')}
-                    subtitle={error}
-                    lowContrast
-                    hideCloseButton
+                {formError && (
+                  <Alert
+                    type="error"
+                    showIcon
+                    title={formError.title}
+                    description={formError.description}
                     className="login__error"
+                    closable={{ onClose: () => setFormError(null) }}
                   />
                 )}
                 <button type="button" className="login__id-display" onClick={handleBackToId}>
-                  <Edit size={16} />
+                  <EditOutlined />
                   <span>{username}</span>
                 </button>
-                <PasswordInput
-                  id="password"
-                  labelText={t('password')}
-                  placeholder={t('passwordPlaceholder')}
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value)
-                    if (passwordError) setPasswordError('')
-                  }}
-                  invalid={Boolean(passwordError)}
-                  invalidText={passwordError}
-                  autoComplete="current-password"
-                  showPasswordLabel={t('showPassword')}
-                  hidePasswordLabel={t('hidePassword')}
-                  size="lg"
-                  ref={passwordRef}
-                  tabIndex={step === 'id' ? -1 : 0}
-                />
+                <div className="login__password-field">
+                  <Input.Password
+                    id="password"
+                    aria-label={t('password')}
+                    placeholder={t('passwordPlaceholder')}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      if (passwordError) setPasswordError('')
+                      if (formError) setFormError(null)
+                    }}
+                    status={passwordError ? 'error' : undefined}
+                    autoComplete="current-password"
+                    size="large"
+                    ref={passwordRef}
+                    tabIndex={step === 'id' ? -1 : 0}
+                  />
+                  {passwordError && <div className="login__field-error" role="alert">{passwordError}</div>}
+                </div>
                 <div className="login__button-row">
                   <Button
-                    type="submit"
-                    kind="primary"
-                    size="lg"
-                    renderIcon={ArrowRight}
+                    htmlType="submit"
+                    type="primary"
+                    size="large"
                     className="login__primary-btn"
+                    icon={<ArrowRightOutlined />}
+                    iconPlacement="end"
                     disabled={submitting}
                   >
                     {submitting ? t('loggingIn') : t('logIn')}

@@ -1,23 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  Column,
-  Grid,
-  InlineNotification,
-  Modal,
-  Select,
-  SelectItem,
-  TextInput,
-} from '@carbon/react'
-import { ChevronLeft, ChevronRight, TrashCan } from '@carbon/icons-react'
+import { Alert, Breadcrumb, Button, Input, Modal, Select, DatePicker } from 'antd'
+import { DeleteOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
 import TimetableGrid from '../components/TimetableGrid'
+import Field from '../ui/Field'
 import { addDays, fmt, mondayOf } from '../utils/date'
 import type { Classroom, OfferingView, Paged, SessionInput, SessionView, TimetableDay } from '../types/api'
 
@@ -148,121 +139,172 @@ export default function TimetablePage() {
   }
 
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('title')}</h1>
-        <p className="courses-page__subtitle">{t('subtitle')}</p>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-      </Column>
+    <div className="courses-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="courses-page__heading">{t('title')}</h1>
+      <p className="courses-page__subtitle">{t('subtitle')}</p>
+      {error && (
+        <Alert type="error" showIcon title={t('error.load')} description={error} className="courses-page__notice" />
+      )}
 
-      <Column sm={4} md={8} lg={16}>
-        <div className="timetable__controls">
+      <div className="timetable__controls">
+        <Field label={t('filter.classroom')} htmlFor="tt-classroom" className="timetable__select">
           <Select
             id="tt-classroom"
-            labelText={t('filter.classroom')}
             value={classroomId}
-            onChange={(e) => setClassroomId(e.target.value)}
-            className="timetable__select"
-          >
-            <SelectItem value="" text={t('filter.selectClassroom')} />
-            {classrooms.map((c) => (
-              <SelectItem
-                key={c.id}
-                value={String(c.id)}
-                text={c.building ? t('filter.classroomOption', { name: c.name, building: c.building }) : c.name}
-              />
-            ))}
-          </Select>
-          <div className="timetable__week">
-            <Button kind="ghost" size="sm" hasIconOnly renderIcon={ChevronLeft} iconDescription={t('weekNav.prev')} onClick={() => setWeekStart(addDays(weekStart, -7))} />
-            <span className="timetable__week-label">
-              {from} ~ {to}
-            </span>
-            <Button kind="ghost" size="sm" hasIconOnly renderIcon={ChevronRight} iconDescription={t('weekNav.next')} onClick={() => setWeekStart(addDays(weekStart, 7))} />
-          </div>
-          <ExportButton
-            path={`/api/timetable/export?classroom_id=${classroomId}&from=${from}&to=${to}`}
-            fallbackName={t('export.filename')}
-            label={t('export.label')}
-            onError={setError}
-            disabled={!classroomId}
+            onChange={(value: string) => setClassroomId(value)}
+            options={[
+              { value: '', label: t('filter.selectClassroom') },
+              ...classrooms.map((c) => ({
+                value: String(c.id),
+                label: c.building ? t('filter.classroomOption', { name: c.name, building: c.building }) : c.name,
+              })),
+            ]}
+          />
+        </Field>
+        <div className="timetable__week">
+          <Button
+            type="text"
+            size="small"
+            icon={<LeftOutlined />}
+            aria-label={t('weekNav.prev')}
+            onClick={() => setWeekStart(addDays(weekStart, -7))}
+          />
+          <span className="timetable__week-label">
+            {from} ~ {to}
+          </span>
+          <Button
+            type="text"
+            size="small"
+            icon={<RightOutlined />}
+            aria-label={t('weekNav.next')}
+            onClick={() => setWeekStart(addDays(weekStart, 7))}
           />
         </div>
-      </Column>
+        <ExportButton
+          path={`/api/timetable/export?classroom_id=${classroomId}&from=${from}&to=${to}`}
+          fallbackName={t('export.filename')}
+          label={t('export.label')}
+          onError={setError}
+          disabled={!classroomId}
+        />
+      </div>
 
-      <Column sm={4} md={8} lg={16}>
-        {!classroomId ? (
-          <p>{t('empty.selectClassroom')}</p>
-        ) : loading ? (
-          <p>{t('empty.loading')}</p>
-        ) : days.length === 0 ? (
-          <p>{t('empty.none')}</p>
-        ) : (
-          <TimetableGrid days={days} interactive={canManage} onCellClick={openCell} />
-        )}
-      </Column>
+      {!classroomId ? (
+        <p>{t('empty.selectClassroom')}</p>
+      ) : loading ? (
+        <p>{t('empty.loading')}</p>
+      ) : days.length === 0 ? (
+        <p>{t('empty.none')}</p>
+      ) : (
+        <TimetableGrid days={days} interactive={canManage} onCellClick={openCell} />
+      )}
 
       {/* Session add/edit modal */}
       <Modal
         open={Boolean(modal)}
-        modalHeading={modal?.session ? t('modal.edit') : t('modal.create')}
-        primaryButtonText={t('modal.submit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setModal(null)}
-        onRequestSubmit={submit}
-        primaryButtonDisabled={saving}
+        title={modal?.session ? t('modal.edit') : t('modal.create')}
+        okText={t('modal.submit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setModal(null)}
+        onOk={submit}
+        confirmLoading={saving}
+        destroyOnHidden
       >
         <div className="courses-page__form">
-          <Select id="s-offering" labelText={t('form.offering')} value={form.offeringId} onChange={(e) => setForm({ ...form, offeringId: e.target.value })}>
-            <SelectItem value="" text={t('form.selectOffering')} />
-            {offerings.map((o) => (
-              <SelectItem
-                key={o.id}
-                value={String(o.id)}
-                text={t('form.offeringOption', { catalogName: o.catalogName, teachingClassName: o.teachingClassName, semester: o.semester })}
-              />
-            ))}
-          </Select>
-          <Select id="s-classroom" labelText={t('form.classroom')} value={form.classroomId} onChange={(e) => setForm({ ...form, classroomId: e.target.value })}>
-            {classrooms.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)} text={c.name} />
-            ))}
-          </Select>
-          <TextInput id="s-date" type="date" labelText={t('form.date')} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-          <TextInput id="s-period-start" type="number" labelText={t('form.periodStart')} min="1" value={form.periodStart} onChange={(e) => setForm({ ...form, periodStart: e.target.value })} />
-          <TextInput id="s-period-end" type="number" labelText={t('form.periodEnd')} min="1" value={form.periodEnd} onChange={(e) => setForm({ ...form, periodEnd: e.target.value })} />
-          <TextInput id="s-note" labelText={t('form.note')} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <Field label={t('form.offering')} htmlFor="s-offering">
+            <Select
+              id="s-offering"
+              value={form.offeringId}
+              onChange={(value: string) => setForm({ ...form, offeringId: value })}
+              options={[
+                { value: '', label: t('form.selectOffering') },
+                ...offerings.map((o) => ({
+                  value: String(o.id),
+                  label: t('form.offeringOption', {
+                    catalogName: o.catalogName,
+                    teachingClassName: o.teachingClassName,
+                    semester: o.semester,
+                  }),
+                })),
+              ]}
+            />
+          </Field>
+          <Field label={t('form.classroom')} htmlFor="s-classroom">
+            <Select
+              id="s-classroom"
+              value={form.classroomId}
+              onChange={(value: string) => setForm({ ...form, classroomId: value })}
+              options={classrooms.map((c) => ({ value: String(c.id), label: c.name }))}
+            />
+          </Field>
+          <Field label={t('form.date')} htmlFor="s-date">
+            <DatePicker
+              id="s-date"
+              allowClear={false}
+              value={form.date ? dayjs(form.date) : null}
+              onChange={(d) => setForm({ ...form, date: d ? d.format('YYYY-MM-DD') : '' })}
+            />
+          </Field>
+          <Field label={t('form.periodStart')} htmlFor="s-period-start">
+            <Input
+              id="s-period-start"
+              type="number"
+              min="1"
+              value={form.periodStart}
+              onChange={(e) => setForm({ ...form, periodStart: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.periodEnd')} htmlFor="s-period-end">
+            <Input
+              id="s-period-end"
+              type="number"
+              min="1"
+              value={form.periodEnd}
+              onChange={(e) => setForm({ ...form, periodEnd: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.note')} htmlFor="s-note">
+            <Input
+              id="s-note"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+            />
+          </Field>
           {modalError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={modalError} lowContrast hideCloseButton />
+            <Alert type="error" showIcon title={t('error.save')} description={modalError} />
           )}
         </div>
         {modal?.session && canManage && (
-          <Button kind="danger" size="sm" renderIcon={TrashCan} onClick={remove} disabled={saving} className="timetable__delete">
+          <Button
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            onClick={remove}
+            disabled={saving}
+            className="timetable__delete"
+          >
             {t('modal.remove')}
           </Button>
         )}
       </Modal>
-    </Grid>
+    </div>
   )
 }

@@ -1,34 +1,21 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
   Checkbox,
-  CheckboxGroup,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
   Tag,
-  TextArea,
-  TextInput,
-  type DataTableHeader,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
+import Field from '../ui/Field'
 import type { CatalogPermission, Role } from '../types/api'
 
 // Form state: permissions is a checkbox map keyed by permission code.
@@ -45,15 +32,6 @@ export default function RolesPage() {
   const { t } = useTranslation('roles')
   const { token } = useAuth()
   const navigate = useNavigate()
-
-  const headers: DataTableHeader[] = [
-    { key: 'id', header: t('field.id') },
-    { key: 'code', header: t('field.code') },
-    { key: 'name', header: t('field.name') },
-    { key: 'description', header: t('field.description') },
-    { key: 'permissions', header: t('field.permissions') },
-    { key: 'isSystem', header: t('field.isSystem') },
-  ]
 
   const [roles, setRoles] = useState<Role[]>([])
   const [catalog, setCatalog] = useState<CatalogPermission[]>([])
@@ -197,280 +175,244 @@ export default function RolesPage() {
 
   const catalogGroups = groupCatalog(catalog)
 
-  return (
-    <Grid fullWidth className="roles-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="roles-page__heading">{t('title')}</h1>
-        <p className="roles-page__subtitle">{t('subtitle')}</p>
-      </Column>
-
-      <Column sm={4} md={8} lg={16}>
-        {loadError && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={loadError}
-            lowContrast
-            hideCloseButton
-            className="roles-page__notice"
+  const columns: TableColumnsType<Role> = [
+    { title: t('field.id'), dataIndex: 'id', width: 72 },
+    { title: t('field.code'), dataIndex: 'code', width: 180 },
+    { title: t('field.name'), dataIndex: 'name', width: 180 },
+    { title: t('field.description'), dataIndex: 'description', ellipsis: true },
+    {
+      title: t('field.permissions'),
+      dataIndex: 'permissions',
+      width: 130,
+      render: (value: string[] | undefined) => {
+        const list = value ?? []
+        const all = list.includes('*')
+        return <Tag color={all ? 'purple' : 'blue'}>{all ? t('permissions.all') : t('permissions.count', { count: list.length })}</Tag>
+      },
+    },
+    {
+      title: t('field.isSystem'),
+      dataIndex: 'isSystem',
+      width: 120,
+      render: (value: boolean) => (
+        <Tag color={value ? 'purple' : 'default'}>{value ? t('system.builtin') : t('system.custom')}</Tag>
+      ),
+    },
+    {
+      title: t('field.actions'),
+      key: 'actions',
+      width: 108,
+      render: (_, role) => (
+        <div className="roles-page__actions">
+          <Button
+            type="text"
+            size="small"
+            aria-label={t('action.edit', { ns: 'common' })}
+            icon={<EditOutlined />}
+            disabled={role.isSystem}
+            onClick={() => openEdit(role)}
           />
-        )}
+          <Button
+            type="text"
+            size="small"
+            danger
+            aria-label={t('action.delete', { ns: 'common' })}
+            icon={<DeleteOutlined />}
+            disabled={role.isSystem}
+            onClick={() => {
+              setDeleteTarget(role)
+              setDeleteError('')
+            }}
+          />
+        </div>
+      ),
+    },
+  ]
 
-        <DataTable rows={roles.map((r) => ({ ...r, id: String(r.id) }))} headers={headers}>
-          {({ rows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: roles.length })}>
-              <TableToolbar>
-                <TableToolbarContent>
-                  <Button renderIcon={Add} size="sm" onClick={openCreate}>
-                    {t('addButton')}
-                  </Button>
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>{t('empty.none')}</TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const role = roles.find((x) => String(x.id) === String(row.id))
-                      const isSystem = Boolean(role?.isSystem)
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'permissions') {
-                              const value = (cell.value ?? []) as string[]
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={value.includes('*') ? 'purple' : 'blue'} size="sm">
-                                    {value.includes('*')
-                                      ? t('permissions.all')
-                                      : t('permissions.count', { count: value.length })}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            if (cell.info.header === 'isSystem') {
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={cell.value ? 'purple' : 'gray'} size="sm">
-                                    {cell.value ? t('system.builtin') : t('system.custom')}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>
-                          })}
-                          <TableCell>
-                            <div className="roles-page__actions">
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                hasIconOnly
-                                renderIcon={Edit}
-                                iconDescription={t('action.edit', { ns: 'common' })}
-                                disabled={isSystem}
-                                onClick={() => openEdit(role)}
-                              />
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                hasIconOnly
-                                renderIcon={TrashCan}
-                                iconDescription={t('action.delete', { ns: 'common' })}
-                                disabled={isSystem}
-                                onClick={() => {
-                                  setDeleteTarget(role ?? null)
-                                  setDeleteError('')
-                                }}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-      </Column>
+  return (
+    <div className="roles-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="roles-page__heading">{t('title')}</h1>
+      <p className="roles-page__subtitle">{t('subtitle')}</p>
+
+      {loadError && (
+        <Alert type="error" showIcon title={t('error.load')} description={loadError} className="roles-page__notice" />
+      )}
+
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: roles.length })}</span>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          {t('addButton')}
+        </Button>
+      </div>
+
+      <Table<Role>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={roles}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 980 }}
+        locale={{ emptyText: t('empty.none') }}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('modal.create')}
-        primaryButtonText={t('modal.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
-        size="lg"
+        title={t('modal.create')}
+        okText={t('modal.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        width={720}
+        style={{ top: 32 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } }}
+        destroyOnHidden
       >
         <div className="roles-page__form">
-          <TextInput
-            id="create-role-code"
-            labelText={t('form.code')}
-            helperText={t('codeHelperCreate')}
-            placeholder={t('placeholder.code')}
-            value={createForm.code}
-            onChange={(e) => setCreateForm({ ...createForm, code: e.target.value })}
-          />
-          <TextInput
-            id="create-role-name"
-            labelText={t('form.name')}
-            placeholder={t('placeholder.name')}
-            value={createForm.name}
-            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-          />
-          <TextArea
-            id="create-role-description"
-            labelText={t('form.description')}
-            value={createForm.description}
-            onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-          />
+          <Field label={t('form.code')} htmlFor="create-role-code" hint={t('codeHelperCreate')}>
+            <Input
+              id="create-role-code"
+              placeholder={t('placeholder.code')}
+              value={createForm.code}
+              onChange={(e) => setCreateForm({ ...createForm, code: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.name')} htmlFor="create-role-name">
+            <Input
+              id="create-role-name"
+              placeholder={t('placeholder.name')}
+              value={createForm.name}
+              onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.description')} htmlFor="create-role-description">
+            <Input.TextArea
+              id="create-role-description"
+              rows={2}
+              value={createForm.description}
+              onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+            />
+          </Field>
           <div className="roles-page__perm-list">
             {catalogGroups.map((group) => (
-              <CheckboxGroup key={group.name} legendText={group.name}>
-                {group.items.map((perm) => (
-                  <Checkbox
-                    key={perm.code}
-                    id={`create-role-perm-${perm.code}`}
-                    labelText={t('permOption', { name: perm.name, code: perm.code })}
-                    checked={permissionChecked(createForm, perm.code)}
-                    onChange={(_, { checked }) =>
-                      togglePermission(createForm, setCreateForm, perm.code, checked)
-                    }
-                  />
-                ))}
-              </CheckboxGroup>
+              <div key={group.name} className="roles-page__perm-group">
+                <div className="roles-page__perm-group-name">{group.name}</div>
+                <div className="roles-page__perm-options">
+                  {group.items.map((perm) => (
+                    <Checkbox
+                      key={perm.code}
+                      id={`create-role-perm-${perm.code}`}
+                      checked={permissionChecked(createForm, perm.code)}
+                      onChange={(e) =>
+                        togglePermission(createForm, setCreateForm, perm.code, e.target.checked)
+                      }
+                    >
+                      {t('permOption', { name: perm.name, code: perm.code })}
+                    </Checkbox>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
-          {createError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.create')}
-              subtitle={createError}
-              lowContrast
-              hideCloseButton
-            />
-          )}
+          {createError && <Alert type="error" showIcon title={t('error.create')} description={createError} />}
         </div>
       </Modal>
 
       {/* Edit */}
       <Modal
         open={Boolean(editTarget)}
-        modalHeading={t('modal.edit', { name: editTarget?.name ?? '' })}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditTarget(null)}
-        onRequestSubmit={handleEdit}
-        primaryButtonDisabled={editing}
-        size="lg"
+        title={t('modal.edit', { name: editTarget?.name ?? '' })}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditTarget(null)}
+        onOk={handleEdit}
+        confirmLoading={editing}
+        width={720}
+        style={{ top: 32 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } }}
+        destroyOnHidden
       >
         <div className="roles-page__form">
-          <TextInput
-            id="edit-role-code"
-            labelText={t('form.code')}
-            value={editForm.code}
-            readOnly
-            helperText={t('codeHelperEdit')}
-          />
-          <TextInput
-            id="edit-role-name"
-            labelText={t('form.name')}
-            value={editForm.name}
-            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-          />
-          <TextArea
-            id="edit-role-description"
-            labelText={t('form.description')}
-            value={editForm.description}
-            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-          />
+          <Field label={t('form.code')} htmlFor="edit-role-code" hint={t('codeHelperEdit')}>
+            <Input id="edit-role-code" value={editForm.code} readOnly />
+          </Field>
+          <Field label={t('form.name')} htmlFor="edit-role-name">
+            <Input
+              id="edit-role-name"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.description')} htmlFor="edit-role-description">
+            <Input.TextArea
+              id="edit-role-description"
+              rows={2}
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+            />
+          </Field>
           <div className="roles-page__perm-list">
             {catalogGroups.map((group) => (
-              <CheckboxGroup key={group.name} legendText={group.name}>
-                {group.items.map((perm) => (
-                  <Checkbox
-                    key={perm.code}
-                    id={`edit-role-perm-${perm.code}`}
-                    labelText={t('permOption', { name: perm.name, code: perm.code })}
-                    checked={permissionChecked(editForm, perm.code)}
-                    onChange={(_, { checked }) =>
-                      togglePermission(editForm, setEditForm, perm.code, checked)
-                    }
-                  />
-                ))}
-              </CheckboxGroup>
+              <div key={group.name} className="roles-page__perm-group">
+                <div className="roles-page__perm-group-name">{group.name}</div>
+                <div className="roles-page__perm-options">
+                  {group.items.map((perm) => (
+                    <Checkbox
+                      key={perm.code}
+                      id={`edit-role-perm-${perm.code}`}
+                      checked={permissionChecked(editForm, perm.code)}
+                      onChange={(e) =>
+                        togglePermission(editForm, setEditForm, perm.code, e.target.checked)
+                      }
+                    >
+                      {t('permOption', { name: perm.name, code: perm.code })}
+                    </Checkbox>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
-          {editError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.save')}
-              subtitle={editError}
-              lowContrast
-              hideCloseButton
-            />
-          )}
+          {editError && <Alert type="error" showIcon title={t('error.save')} description={editError} />}
         </div>
       </Modal>
 
       {/* Delete */}
       <Modal
-        danger
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
-        <p className="roles-page__confirm-text">
-          {t('deleteConfirm', { name: deleteTarget?.name })}
-        </p>
-        {deleteError && (
-          <InlineNotification
-            kind="error"
-            title={t('error.delete')}
-            subtitle={deleteError}
-            lowContrast
-            hideCloseButton
-          />
-        )}
+        <p className="roles-page__confirm-text">{t('deleteConfirm', { name: deleteTarget?.name })}</p>
+        {deleteError && <Alert type="error" showIcon title={t('error.delete')} description={deleteError} />}
       </Modal>
-    </Grid>
+    </div>
   )
 }
 

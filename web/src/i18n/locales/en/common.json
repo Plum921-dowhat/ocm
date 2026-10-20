@@ -104,6 +104,8 @@
   },
   "theme": {
     "system": "System",
+    "light": "Light",
+    "dark": "Dark",
     "white": "Light (White)",
     "g10": "Light (Gray 10)",
     "g90": "Dark (Gray 90)",
@@ -112,5 +114,8 @@
   "password": {
     "show": "Show password",
     "hide": "Hide password"
+  },
+  "pagination": {
+    "total": "{{total}} items"
   }
 }

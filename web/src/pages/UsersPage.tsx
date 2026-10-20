@@ -1,44 +1,33 @@
 import { useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
   Checkbox,
-  CheckboxGroup,
-  Column,
-  DataTable,
   DatePicker,
-  DatePickerInput,
-  Grid,
-  InlineNotification,
+  Input,
   Modal,
-  PasswordInput,
   Select,
-  SelectItem,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
   Tag,
-  TextInput,
-  type DataTableHeader,
-  type TagProps,
-} from '@carbon/react'
-import { Add, Edit, Password as PasswordIcon, TrashCan, UserSettings } from '@carbon/icons-react'
+  type TableColumnsType,
+} from 'antd'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  KeyOutlined,
+  PlusOutlined,
+  SafetyCertificateOutlined,
+} from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 import usePagedList from '../hooks/usePagedList'
 import ListPagination from '../components/ListPagination'
+import Field from '../ui/Field'
 import { formatDate } from '../i18n/formatters'
-import { datePickerLocale } from '../i18n/carbonLocale'
 import type {
   CatalogPermission,
   GroupBrief,
@@ -53,13 +42,13 @@ import type {
 // User type enum values (not translatable text — labels come from i18n).
 const TYPE_KEYS = ['student', 'teacher', 'staff'] as const
 
-const TYPE_KIND: Record<string, TagProps<'div'>['type']> = {
-  student: 'teal',
+const TYPE_COLOR: Record<string, string> = {
+  student: 'cyan',
   teacher: 'blue',
-  staff: 'gray',
+  staff: 'default',
 }
 
-const typeKind = (type: string): TagProps<'div'>['type'] => TYPE_KIND[type] ?? 'gray'
+const typeColor = (type: string) => TYPE_COLOR[type] ?? 'default'
 
 interface CreateForm {
   username: string
@@ -92,21 +81,8 @@ export default function UsersPage() {
   const canManage = can('user:manage')
   const navigate = useNavigate()
 
-  const headers: DataTableHeader[] = [
-    { key: 'id', header: t('field.id') },
-    { key: 'username', header: t('field.username') },
-    { key: 'displayName', header: t('field.displayName') },
-    { key: 'type', header: t('field.type') },
-    { key: 'roles', header: t('field.roles') },
-    { key: 'groups', header: t('field.groups') },
-    { key: 'createdAt', header: t('field.createdAt') },
-  ]
-
   const list = usePagedList<User>({ path: '/api/users', token })
   const { loading } = list
-
-  // Carbon DataTable keys rows by a string id.
-  const tableRows = list.items.map((u) => ({ ...u, id: String(u.id) }))
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState<CreateForm>(emptyCreate)
@@ -317,333 +293,266 @@ export default function UsersPage() {
 
   const catalogGroups = groupCatalog(grantCatalog)
 
+  const columns: TableColumnsType<User> = [
+    { title: t('field.id'), dataIndex: 'id', width: 72 },
+    { title: t('field.username'), dataIndex: 'username', width: 160 },
+    { title: t('field.displayName'), dataIndex: 'displayName', width: 160 },
+    {
+      title: t('field.type'),
+      dataIndex: 'type',
+      width: 110,
+      render: (value: string) => <Tag color={typeColor(value)}>{t('type.' + value, { defaultValue: value })}</Tag>,
+    },
+    {
+      title: t('field.roles'),
+      dataIndex: 'roles',
+      width: 220,
+      render: (items: RoleBrief[]) => <TagList items={items} />,
+    },
+    {
+      title: t('field.groups'),
+      dataIndex: 'groups',
+      width: 200,
+      render: (items: GroupBrief[]) => <TagList items={items} />,
+    },
+    {
+      title: t('field.createdAt'),
+      dataIndex: 'createdAt',
+      width: 170,
+      render: (value: string) => formatDate(value),
+    },
+    {
+      title: t('field.actions'),
+      key: 'actions',
+      width: 168,
+      fixed: 'right',
+      render: (_, u) =>
+        canManage ? (
+          <div className="users-page__actions">
+            <Button
+              type="text"
+              size="small"
+              aria-label={t('action.edit', { ns: 'common' })}
+              icon={<EditOutlined />}
+              onClick={() => openEdit(u)}
+            />
+            <Button
+              type="text"
+              size="small"
+              aria-label={t('iconAction.password')}
+              icon={<KeyOutlined />}
+              onClick={() => openPassword(u)}
+            />
+            <Button
+              type="text"
+              size="small"
+              aria-label={t('iconAction.grants')}
+              icon={<SafetyCertificateOutlined />}
+              onClick={() => openGrants(u)}
+            />
+            <Button
+              type="text"
+              size="small"
+              danger
+              aria-label={t('action.delete', { ns: 'common' })}
+              icon={<DeleteOutlined />}
+              disabled={isSelf(u)}
+              onClick={() => openDelete(u)}
+            />
+          </div>
+        ) : (
+          <span className="users-page__readonly">{t('readonly')}</span>
+        ),
+    },
+  ]
+
   return (
-    <Grid fullWidth className="users-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="users-page__heading">{t('title')}</h1>
-        <p className="users-page__subtitle">{t('subtitle')}</p>
-      </Column>
+    <div className="users-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="users-page__heading">{t('title')}</h1>
+      <p className="users-page__subtitle">{t('subtitle')}</p>
 
-      <Column sm={4} md={8} lg={16}>
-        {list.error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={list.error}
-            lowContrast
-            hideCloseButton
-            className="users-page__notice"
-          />
-        )}
+      {list.error && (
+        <Alert type="error" showIcon title={t('error.load')} description={list.error} className="users-page__notice" />
+      )}
 
-        <DataTable rows={tableRows} headers={headers}>
-          {({
-            rows,
-            headers: tableHeaders,
-            getTableProps,
-            getHeaderProps,
-            getRowProps,
-            getToolbarProps,
-          }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('searchPlaceholder')} />
-                  {canManage && (
-                    <Button renderIcon={Add} size="sm" onClick={() => setCreateOpen(true)}>
-                      {t('addButton')}
-                    </Button>
-                  )}
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {tableHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length + 1}>
-                        {list.q ? t('empty.search') : t('empty.none')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => {
-                      const u = list.items.find((x) => String(x.id) === String(row.id))
-                      if (!u) return null
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'type') {
-                              const value = cell.value as string
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={typeKind(value)} size="sm">
-                                    {t('type.' + value, { defaultValue: value })}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            if (cell.info.header === 'roles' || cell.info.header === 'groups') {
-                              const items = (cell.value ?? []) as Array<RoleBrief | GroupBrief>
-                              return (
-                                <TableCell key={cell.id}>
-                                  {items.length === 0 ? (
-                                    '-'
-                                  ) : (
-                                    <div className="users-page__tags">
-                                      {items.map((item) => (
-                                        <Tag key={`${cell.info.header}-${item.id}`} type="cool-gray" size="sm">
-                                          {item.name}
-                                        </Tag>
-                                      ))}
-                                    </div>
-                                  )}
-                                </TableCell>
-                              )
-                            }
-                            if (cell.info.header === 'createdAt') {
-                              return <TableCell key={cell.id}>{formatDate(cell.value as string)}</TableCell>
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>
-                          })}
-                          <TableCell>
-                            <div className="users-page__actions">
-                              {canManage && (
-                                <>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    hasIconOnly
-                                    renderIcon={Edit}
-                                    iconDescription={t('action.edit', { ns: 'common' })}
-                                    onClick={() => openEdit(u)}
-                                  />
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    hasIconOnly
-                                    renderIcon={PasswordIcon}
-                                    iconDescription={t('iconAction.password')}
-                                    onClick={() => openPassword(u)}
-                                  />
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    hasIconOnly
-                                    renderIcon={UserSettings}
-                                    iconDescription={t('iconAction.grants')}
-                                    onClick={() => openGrants(u)}
-                                  />
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    hasIconOnly
-                                    renderIcon={TrashCan}
-                                    iconDescription={t('action.delete', { ns: 'common' })}
-                                    disabled={isSelf(u)}
-                                    onClick={() => openDelete(u)}
-                                  />
-                                </>
-                              )}
-                              {!canManage && <span className="users-page__readonly">{t('readonly')}</span>}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
         />
-      </Column>
+        {canManage && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            {t('addButton')}
+          </Button>
+        )}
+      </div>
+
+      <Table<User>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1180 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Create */}
       <Modal
         open={createOpen}
-        modalHeading={t('modal.create')}
-        primaryButtonText={t('modal.createSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={handleCreate}
-        primaryButtonDisabled={creating}
+        title={t('modal.create')}
+        okText={t('modal.createSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        destroyOnHidden
       >
         <div className="users-page__form">
-          <TextInput
-            id="create-username"
-            labelText={t('form.username')}
-            value={createForm.username}
-            onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
-          />
-          <PasswordInput
-            id="create-password"
-            labelText={t('form.password')}
-            placeholder={t('form.passwordPlaceholder')}
-            value={createForm.password}
-            onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-            showPasswordLabel={t('password.show', { ns: 'common' })}
-            hidePasswordLabel={t('password.hide', { ns: 'common' })}
-          />
-          <TextInput
-            id="create-displayName"
-            labelText={t('form.displayName')}
-            value={createForm.displayName}
-            onChange={(e) => setCreateForm({ ...createForm, displayName: e.target.value })}
-          />
-          <Select
-            id="create-type"
-            labelText={t('form.type')}
-            value={createForm.type}
-            onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
-          >
-            {TYPE_KEYS.map((k) => (
-              <SelectItem key={k} value={k} text={t('type.' + k)} />
-            ))}
-          </Select>
-          {createError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.create')}
-              subtitle={createError}
-              lowContrast
-              hideCloseButton
+          <Field label={t('form.username')} htmlFor="create-username">
+            <Input
+              id="create-username"
+              value={createForm.username}
+              onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
             />
-          )}
+          </Field>
+          <Field label={t('form.password')} htmlFor="create-password">
+            <Input.Password
+              id="create-password"
+              placeholder={t('form.passwordPlaceholder')}
+              value={createForm.password}
+              onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.displayName')} htmlFor="create-displayName">
+            <Input
+              id="create-displayName"
+              value={createForm.displayName}
+              onChange={(e) => setCreateForm({ ...createForm, displayName: e.target.value })}
+            />
+          </Field>
+          <Field label={t('form.type')} htmlFor="create-type">
+            <Select
+              id="create-type"
+              value={createForm.type}
+              onChange={(type: string) => setCreateForm({ ...createForm, type })}
+              options={TYPE_KEYS.map((k) => ({ value: k, label: t('type.' + k) }))}
+            />
+          </Field>
+          {createError && <Alert type="error" showIcon title={t('error.create')} description={createError} />}
         </div>
       </Modal>
 
       {/* Edit */}
       <Modal
         open={Boolean(editTarget)}
-        modalHeading={t('modal.edit', { name: editTarget?.username ?? '' })}
-        primaryButtonText={t('modal.editSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setEditTarget(null)}
-        onRequestSubmit={handleEdit}
-        primaryButtonDisabled={editing}
+        title={t('modal.edit', { name: editTarget?.username ?? '' })}
+        okText={t('modal.editSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setEditTarget(null)}
+        onOk={handleEdit}
+        confirmLoading={editing}
+        destroyOnHidden
       >
         <div className="users-page__form">
-          <TextInput
-            id="edit-displayName"
-            labelText={t('form.displayName')}
-            value={editForm.displayName}
-            onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
-          />
-          <Select
-            id="edit-type"
-            labelText={t('form.type')}
-            value={editForm.type}
-            onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
-          >
-            {TYPE_KEYS.map((k) => (
-              <SelectItem key={k} value={k} text={t('type.' + k)} />
-            ))}
-          </Select>
-          {editError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.save')}
-              subtitle={editError}
-              lowContrast
-              hideCloseButton
+          <Field label={t('form.displayName')} htmlFor="edit-displayName">
+            <Input
+              id="edit-displayName"
+              value={editForm.displayName}
+              onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
             />
-          )}
+          </Field>
+          <Field label={t('form.type')} htmlFor="edit-type">
+            <Select
+              id="edit-type"
+              value={editForm.type}
+              onChange={(type: string) => setEditForm({ ...editForm, type })}
+              options={TYPE_KEYS.map((k) => ({ value: k, label: t('type.' + k) }))}
+            />
+          </Field>
+          {editError && <Alert type="error" showIcon title={t('error.save')} description={editError} />}
         </div>
       </Modal>
 
       {/* Password */}
       <Modal
         open={Boolean(pwdTarget)}
-        modalHeading={t('modal.password', { name: pwdTarget?.username ?? '' })}
-        primaryButtonText={t('modal.passwordSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setPwdTarget(null)}
-        onRequestSubmit={handlePassword}
-        primaryButtonDisabled={pwdSaving}
+        title={t('modal.password', { name: pwdTarget?.username ?? '' })}
+        okText={t('modal.passwordSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setPwdTarget(null)}
+        onOk={handlePassword}
+        confirmLoading={pwdSaving}
+        destroyOnHidden
       >
         <div className="users-page__form">
-          <PasswordInput
-            id="pwd-password"
-            labelText={t('form.newPassword')}
-            value={pwdForm.password}
-            onChange={(e) => setPwdForm({ ...pwdForm, password: e.target.value })}
-            showPasswordLabel={t('password.show', { ns: 'common' })}
-            hidePasswordLabel={t('password.hide', { ns: 'common' })}
-          />
-          <PasswordInput
-            id="pwd-confirm"
-            labelText={t('form.confirmPassword')}
-            value={pwdForm.confirm}
-            onChange={(e) => setPwdForm({ ...pwdForm, confirm: e.target.value })}
-            showPasswordLabel={t('password.show', { ns: 'common' })}
-            hidePasswordLabel={t('password.hide', { ns: 'common' })}
-          />
-          {pwdError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.password')}
-              subtitle={pwdError}
-              lowContrast
-              hideCloseButton
+          <Field label={t('form.newPassword')} htmlFor="pwd-password">
+            <Input.Password
+              id="pwd-password"
+              value={pwdForm.password}
+              onChange={(e) => setPwdForm({ ...pwdForm, password: e.target.value })}
             />
-          )}
+          </Field>
+          <Field label={t('form.confirmPassword')} htmlFor="pwd-confirm">
+            <Input.Password
+              id="pwd-confirm"
+              value={pwdForm.confirm}
+              onChange={(e) => setPwdForm({ ...pwdForm, confirm: e.target.value })}
+            />
+          </Field>
+          {pwdError && <Alert type="error" showIcon title={t('error.password')} description={pwdError} />}
         </div>
       </Modal>
 
       {/* Grants */}
       <Modal
         open={Boolean(grantTarget)}
-        modalHeading={t('modal.grants', { name: grantTarget?.displayName ?? '' })}
-        primaryButtonText={t('modal.grantsSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setGrantTarget(null)}
-        onRequestSubmit={handleGrantSave}
-        primaryButtonDisabled={grantSaving}
-        size="lg"
+        title={t('modal.grants', { name: grantTarget?.displayName ?? '' })}
+        okText={t('modal.grantsSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setGrantTarget(null)}
+        onOk={handleGrantSave}
+        confirmLoading={grantSaving}
+        width={720}
+        style={{ top: 32 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } }}
+        destroyOnHidden
       >
         <div className="users-page__grants">
           {grantLoading && <p>{t('empty.loading')}</p>}
-          {grantError && (
-            <InlineNotification
-              kind="error"
-              title={t('error.grants')}
-              subtitle={grantError}
-              lowContrast
-              hideCloseButton
-            />
-          )}
+          {grantError && <Alert type="error" showIcon title={t('error.grants')} description={grantError} />}
           {!grantLoading && (
             <>
               <section className="users-page__grants-section">
@@ -656,41 +565,36 @@ export default function UsersPage() {
                     <div key={role.id} className="users-page__grant-row">
                       <Checkbox
                         id={`grant-role-${role.id}`}
-                        labelText={role.name}
                         checked={entry.checked}
-                        onChange={(_, { checked }) =>
+                        onChange={(e) =>
                           setGrantForm({
                             ...grantForm,
-                            roles: { ...grantForm.roles, [role.code]: { ...entry, checked } },
+                            roles: { ...grantForm.roles, [role.code]: { ...entry, checked: e.target.checked } },
                           })
                         }
-                      />
-                      {role.isSystem && <Tag type="purple" size="sm">{t('grants.builtin')}</Tag>}
+                      >
+                        {role.name}
+                      </Checkbox>
+                      {role.isSystem && <Tag color="purple">{t('grants.builtin')}</Tag>}
                       {entry.checked && (
                         <DatePicker
-                          datePickerType="single"
-                          dateFormat="Y-m-d"
-                          locale={datePickerLocale()}
-                          value={entry.expiresAt}
-                          onChange={(_dates, dateStr) =>
+                          id={`grant-role-${role.id}-expiry`}
+                          size="small"
+                          placeholder={t('grants.expiryPlaceholder')}
+                          aria-label={t('grants.expiryLabel')}
+                          value={entry.expiresAt ? dayjs(entry.expiresAt) : null}
+                          onChange={(d) =>
                             setGrantForm({
                               ...grantForm,
                               roles: {
                                 ...grantForm.roles,
-                                [role.code]: { ...entry, expiresAt: dateStr },
+                                [role.code]: { ...entry, expiresAt: d ? d.format('YYYY-MM-DD') : '' },
                               },
                             })
                           }
-                        >
-                          <DatePickerInput
-                            id={`grant-role-${role.id}-expiry`}
-                            placeholder={t('grants.expiryPlaceholder')}
-                            labelText={t('grants.expiryLabel')}
-                            size="sm"
-                          />
-                        </DatePicker>
+                        />
                       )}
-                      {expired && <Tag type="red" size="sm">{t('grants.expired')}</Tag>}
+                      {expired && <Tag color="red">{t('grants.expired')}</Tag>}
                     </div>
                   )
                 })}
@@ -699,26 +603,26 @@ export default function UsersPage() {
                 <h3>{t('grants.permissions')}</h3>
                 <p className="users-page__grants-hint">{t('grants.permissionsHint')}</p>
                 {catalogGroups.map((group) => (
-                  <CheckboxGroup
-                    key={group.name}
-                    legendText={group.name}
-                    className="users-page__perm-group"
-                  >
-                    {group.items.map((perm) => (
-                      <Checkbox
-                        key={perm.code}
-                        id={`grant-perm-${perm.code}`}
-                        labelText={t('grants.permOption', { name: perm.name, code: perm.code })}
-                        checked={Boolean(grantForm.permissions[perm.code])}
-                        onChange={(_, { checked }) =>
-                          setGrantForm({
-                            ...grantForm,
-                            permissions: { ...grantForm.permissions, [perm.code]: checked },
-                          })
-                        }
-                      />
-                    ))}
-                  </CheckboxGroup>
+                  <div key={group.name} className="users-page__perm-group">
+                    <div className="users-page__perm-group-name">{group.name}</div>
+                    <div className="users-page__perm-options">
+                      {group.items.map((perm) => (
+                        <Checkbox
+                          key={perm.code}
+                          id={`grant-perm-${perm.code}`}
+                          checked={Boolean(grantForm.permissions[perm.code])}
+                          onChange={(e) =>
+                            setGrantForm({
+                              ...grantForm,
+                              permissions: { ...grantForm.permissions, [perm.code]: e.target.checked },
+                            })
+                          }
+                        >
+                          {t('grants.permOption', { name: perm.name, code: perm.code })}
+                        </Checkbox>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </section>
               <section className="users-page__grants-section">
@@ -729,9 +633,7 @@ export default function UsersPage() {
                 ) : (
                   <div className="users-page__tags">
                     {grantForm.groups.map((g) => (
-                      <Tag key={g.id} type="cool-gray" size="sm">
-                        {g.name}
-                      </Tag>
+                      <Tag key={g.id}>{g.name}</Tag>
                     ))}
                   </div>
                 )}
@@ -743,29 +645,36 @@ export default function UsersPage() {
 
       {/* Delete */}
       <Modal
-        danger
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
         <p className="users-page__confirm-text">
           {t('deleteConfirm', { displayName: deleteTarget?.displayName, username: deleteTarget?.username })}
         </p>
-        {deleteError && (
-          <InlineNotification
-            kind="error"
-            title={t('error.delete')}
-            subtitle={deleteError}
-            lowContrast
-            hideCloseButton
-          />
-        )}
+        {deleteError && <Alert type="error" showIcon title={t('error.delete')} description={deleteError} />}
       </Modal>
-    </Grid>
+    </div>
+  )
+}
+
+// TagList renders a user's roles or groups; an empty list shows a dash so the
+// column stays visually aligned.
+function TagList({ items }: { items: Array<RoleBrief | GroupBrief> | undefined }) {
+  const list = items ?? []
+  if (list.length === 0) return <>-</>
+  return (
+    <div className="users-page__tags">
+      {list.map((item) => (
+        <Tag key={item.id}>{item.name}</Tag>
+      ))}
+    </div>
   )
 }
 

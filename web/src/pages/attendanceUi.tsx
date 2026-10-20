@@ -1,4 +1,4 @@
-import { Tag, type TagProps } from '@carbon/react'
+import { Tag } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../i18n/formatters'
 
@@ -10,39 +10,32 @@ import { formatDate } from '../i18n/formatters'
 export const STATUS_KEYS = ['present', 'late', 'absent', 'leave'] as const
 export type RecordStatus = (typeof STATUS_KEYS)[number]
 
-// ComboBox option shape shared by the attendance pages' offering/session
-// pickers: id is the stringified entity id (ComboBox rows key by string).
+// Picker option shape shared by the attendance pages' offering/session
+// pickers: id is the stringified entity id (options key by string).
 export interface PickerOption {
   id: string
   text: string
 }
 
-// Carbon Tag types per record status: present positive, absent warning-red,
-// leave neutral. Carbon Tag has no 'yellow' kind (bx--tag--yellow has no CSS),
-// so 'late' uses purple to stay distinguishable from the gray leave tag.
-const STATUS_COLOR: Record<RecordStatus, TagProps<'div'>['type']> = {
+// Ant Design Tag colors per record status: present positive, absent red,
+// leave neutral. 'late' uses purple to stay distinguishable from the gray
+// leave tag (Ant Design presets have no distinct "warning yellow" label that
+// reads well next to red/green).
+const STATUS_COLOR: Record<RecordStatus, string> = {
   present: 'green',
   late: 'purple',
   absent: 'red',
-  leave: 'gray',
+  leave: 'default',
 }
 
 export function StatusTag({ status }: { status: string }) {
   const { t } = useTranslation('common')
-  return (
-    <Tag type={STATUS_COLOR[status as RecordStatus] ?? 'gray'} size="sm">
-      {t(`status.${status}`, { defaultValue: status })}
-    </Tag>
-  )
+  return <Tag color={STATUS_COLOR[status as RecordStatus] ?? 'default'}>{t(`status.${status}`, { defaultValue: status })}</Tag>
 }
 
 export function CheckinStatusTag({ status }: { status: string }) {
   const { t } = useTranslation('attendance')
-  return (
-    <Tag type={status === 'active' ? 'blue' : 'gray'} size="sm">
-      {t(`checkinStatus.${status}`, { defaultValue: status })}
-    </Tag>
-  )
+  return <Tag color={status === 'active' ? 'blue' : 'default'}>{t(`checkinStatus.${status}`, { defaultValue: status })}</Tag>
 }
 
 // formatDateTime keeps the year (attendance records span time, so the year

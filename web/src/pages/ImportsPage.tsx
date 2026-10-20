@@ -1,29 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
-  Select,
-  SelectItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-  Tag,
-  type DataTableHeader,
-  type TagProps,
-} from '@carbon/react'
-import { Upload } from '@carbon/icons-react'
+import { useEffect, useState } from 'react'
+import { Alert, Breadcrumb, Button, Input, Select, Table, Tag, Upload, type TableColumnsType } from 'antd'
+import { SearchOutlined, UploadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -34,13 +11,13 @@ import usePagedList from '../hooks/usePagedList'
 import { formatDate } from '../i18n/formatters'
 import type { ImportJob } from '../types/api'
 
-const STATUS_KIND: Record<string, TagProps<'div'>['type']> = {
+const STATUS_COLOR: Record<string, string> = {
   pending: 'blue',
   processing: 'blue',
   preview: 'purple',
   succeeded: 'green',
   failed: 'red',
-  cancelled: 'gray',
+  cancelled: 'default',
 }
 
 // ImportsPage (/imports) is the regular single-file import: pick a type, upload
@@ -52,17 +29,6 @@ export default function ImportsPage() {
   const { t } = useTranslation('imports')
   const { token } = useAuth()
   const navigate = useNavigate()
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const headers: DataTableHeader[] = [
-    { key: 'type', header: t('field.type') },
-    { key: 'filename', header: t('field.filename') },
-    { key: 'status', header: t('field.status') },
-    { key: 'totalRows', header: t('field.totalRows') },
-    { key: 'succeededRows', header: t('field.succeededRows') },
-    { key: 'failedRows', header: t('field.failedRows') },
-    { key: 'createdAt', header: t('field.createdAt') },
-  ]
 
   const list = usePagedList<ImportJob>({ path: '/api/imports', token })
   const { loading } = list
@@ -90,7 +56,6 @@ export default function ImportsPage() {
       setUploadError('')
       await apiUpload(`/api/imports/${importType}`, { file: selectedFile, token })
       setSelectedFile(null)
-      if (fileRef.current) fileRef.current.value = ''
       list.reload()
     } catch (err) {
       setUploadError((err as Error).message)
@@ -99,171 +64,170 @@ export default function ImportsPage() {
     }
   }
 
-  const rows = list.items.map((j) => ({
-    id: String(j.id),
-    type: j.type,
-    filename: j.filename || t('unnamed'),
-    status: j.status,
-    totalRows: j.totalRows,
-    succeededRows: j.succeededRows,
-    failedRows: j.failedRows,
-    createdAt: j.createdAt,
-  }))
+  const columns: TableColumnsType<ImportJob> = [
+    {
+      title: t('field.type'),
+      dataIndex: 'type',
+      width: 160,
+      render: (value: string) => typeLabel(value),
+    },
+    {
+      title: t('field.filename'),
+      dataIndex: 'filename',
+      ellipsis: true,
+      render: (value: string) => value || t('unnamed'),
+    },
+    {
+      title: t('field.status'),
+      dataIndex: 'status',
+      width: 120,
+      render: (value: string) => (
+        <Tag color={STATUS_COLOR[value] ?? 'default'}>{t('status.' + value, { defaultValue: value })}</Tag>
+      ),
+    },
+    { title: t('field.totalRows'), dataIndex: 'totalRows', width: 100 },
+    { title: t('field.succeededRows'), dataIndex: 'succeededRows', width: 100 },
+    { title: t('field.failedRows'), dataIndex: 'failedRows', width: 100 },
+    {
+      title: t('field.createdAt'),
+      dataIndex: 'createdAt',
+      width: 170,
+      render: (value: string) => formatDate(value),
+    },
+    {
+      title: t('field.actions'),
+      key: 'actions',
+      width: 120,
+      render: (_, job) =>
+        job.status === 'pending' || job.status === 'processing' ? (
+          <span className="imports-page__muted">-</span>
+        ) : (
+          <Button type="link" size="small" onClick={() => navigate(`/imports/${job.id}`)}>
+            {job.status === 'preview' ? t('action.viewPreview') : t('action.viewDetail')}
+          </Button>
+        ),
+    },
+  ]
 
-  const colSpan = headers.length + 1
   const typeCfg = IMPORT_TYPES[importType]
 
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('title')}</h1>
-        <p className="courses-page__subtitle">{t('subtitle')}</p>
-        {list.error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.load')}
-            subtitle={list.error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
-      </Column>
-
-      <Column sm={4} md={8} lg={16}>
-        <div className="imports-page__upload">
-          <Select
-            id="import-type"
-            className="imports-page__type-select"
-            labelText={t('upload.typeLabel')}
-            value={importType}
-            onChange={(e) => setImportType(e.target.value)}
-            size="sm"
-          >
-            {Object.keys(IMPORT_TYPES).map((value) => (
-              <SelectItem key={value} value={value} text={t('types.' + value + '.label')} />
-            ))}
-          </Select>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-          />
-          <Button renderIcon={Upload} size="sm" onClick={handleUpload} disabled={!selectedFile || uploading}>
-            {uploading ? t('upload.uploading') : t('upload.button')}
-          </Button>
-          {uploadError && (
-            <InlineNotification
-              kind="error"
-              title={t('upload.error')}
-              subtitle={uploadError}
-              lowContrast
-              hideCloseButton
-              className="imports-page__upload-err"
-            />
-          )}
-        </div>
-        <p className="imports-page__schema">
-          <strong>{typeLabel(importType)}</strong>
-          {t('schemaIntroTail')}
-          <code>{typeCfg?.schema}</code>
-        </p>
-        <p className="imports-page__note">{t('types.' + importType + '.note')}</p>
-      </Column>
-
-      <Column sm={4} md={8} lg={16}>
-        <DataTable rows={rows} headers={headers}>
-          {({ rows: tableRows, headers: renderedHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('table.searchPlaceholder')} />
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {renderedHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : tableRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{list.q ? t('empty.search') : t('empty.none')}</TableCell>
-                    </TableRow>
-                  ) : (
-                    tableRows.map((row) => {
-                      const j = list.items.find((x) => String(x.id) === String(row.id))
-                      const viewable = j && j.status !== 'pending' && j.status !== 'processing'
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'type') {
-                              return <TableCell key={cell.id}>{typeLabel(cell.value as string)}</TableCell>
-                            }
-                            if (cell.info.header === 'status') {
-                              const value = cell.value as string
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={STATUS_KIND[value] ?? 'gray'} size="sm">
-                                    {t('status.' + value, { defaultValue: value })}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            if (cell.info.header === 'createdAt') {
-                              return <TableCell key={cell.id}>{formatDate(cell.value as string)}</TableCell>
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string | number}</TableCell>
-                          })}
-                          <TableCell>
-                            {j && viewable ? (
-                              <Button kind="ghost" size="sm" onClick={() => navigate(`/imports/${j.id}`)}>
-                                {j.status === 'preview' ? t('action.viewPreview') : t('action.viewDetail')}
-                              </Button>
-                            ) : (
-                              <span style={{ color: 'var(--cds-text-secondary)' }}>-</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+    <div className="imports-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="courses-page__heading">{t('title')}</h1>
+      <p className="courses-page__subtitle">{t('subtitle')}</p>
+      {list.error && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('error.load')}
+          description={list.error}
+          className="courses-page__notice"
         />
-      </Column>
-    </Grid>
+      )}
+
+      <div className="imports-page__upload">
+        <Select
+          id="import-type"
+          className="imports-page__type-select"
+          aria-label={t('upload.typeLabel')}
+          value={importType}
+          onChange={setImportType}
+          options={Object.keys(IMPORT_TYPES).map((value) => ({
+            value,
+            label: t('types.' + value + '.label'),
+          }))}
+        />
+        <Upload
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          maxCount={1}
+          fileList={
+            selectedFile
+              ? [{ uid: 'selected', name: selectedFile.name, status: 'done' as const }]
+              : []
+          }
+          beforeUpload={(file) => {
+            setSelectedFile(file)
+            return false
+          }}
+          onRemove={() => setSelectedFile(null)}
+        >
+          <Button icon={<UploadOutlined />}>{t('upload.chooseFile')}</Button>
+        </Upload>
+        <Button
+          type="primary"
+          onClick={handleUpload}
+          disabled={!selectedFile}
+          loading={uploading}
+        >
+          {uploading ? t('upload.uploading') : t('upload.button')}
+        </Button>
+      </div>
+      {uploadError && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('upload.error')}
+          description={uploadError}
+          className="imports-page__upload-err"
+        />
+      )}
+
+      <p className="imports-page__schema">
+        <strong>{typeLabel(importType)}</strong>
+        {t('schemaIntroTail')}
+        <code>{typeCfg?.schema}</code>
+      </p>
+      <p className="imports-page__note">{t('types.' + importType + '.note')}</p>
+
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder={t('table.searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
+          className="ds-table-toolbar__search"
+        />
+      </div>
+
+      <Table<ImportJob>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1080 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
+    </div>
   )
 }

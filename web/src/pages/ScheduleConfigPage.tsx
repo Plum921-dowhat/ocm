@@ -1,18 +1,6 @@
 import { useState } from 'react'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  Column,
-  Grid,
-  InlineNotification,
-  Modal,
-  Select,
-  SelectItem,
-  TextInput,
-  Tile,
-} from '@carbon/react'
-import { Add, Edit, TrashCan } from '@carbon/icons-react'
+import { Alert, Breadcrumb, Button, Card, Input, Modal, Select } from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
@@ -20,6 +8,7 @@ import { apiFetch } from '../auth/api'
 import ExportButton from '../components/ExportButton'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import type { PeriodInput, Regime, RegimeInput } from '../types/api'
 
 // Regime form: the day field is a text input, so it holds a string while
@@ -173,53 +162,56 @@ export default function ScheduleConfigPage() {
   }
 
   return (
-    <Grid fullWidth className="courses-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
+    <div className="courses-page">
+      <div>
+        <Breadcrumb
+          aria-label={t('aria.breadcrumb', { ns: 'common' })}
+          items={[
+            {
+              title: (
+                <a
+                  href="/"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    navigate('/')
+                  }}
+                >
+                  {t('breadcrumb.home')}
+                </a>
+              ),
+            },
+            { title: t('breadcrumb.current') },
+          ]}
+        />
         <h1 className="courses-page__heading">{t('title')}</h1>
         <p className="courses-page__subtitle">{t('subtitle')}</p>
         {error && (
-          <InlineNotification
-            kind="error"
+          <Alert
+            type="error"
+            showIcon
             title={t('error.load')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
+            description={error}
             className="courses-page__notice"
           />
         )}
-        {canManage && (
-          <Button renderIcon={Add} size="sm" onClick={openCreateRegime} className="courses-page__add">
-            {t('addButton')}
-          </Button>
-        )}
-        <ExportButton
-          path="/api/schedule/regimes/export"
-          fallbackName="regimes.xlsx"
-          onError={setExportError}
-          className="courses-page__add"
-        />
-      </Column>
+        <div className="courses-page__toolbar">
+          {canManage && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateRegime}>
+              {t('addButton')}
+            </Button>
+          )}
+          <ExportButton path="/api/schedule/regimes/export" fallbackName="regimes.xlsx" onError={setExportError} />
+        </div>
+      </div>
 
-      <Column sm={4} md={8} lg={16}>
+      <div>
         {loading ? (
           <p>{t('empty.loading')}</p>
         ) : list.items.length === 0 ? (
           <p>{t('empty.none')}</p>
         ) : (
           list.items.map((r) => (
-            <Tile key={r.id} className="schedule-regime">
+            <Card key={r.id} size="small" className="schedule-regime">
               <div className="schedule-regime__head">
                 <div>
                   <strong>{r.name}</strong>
@@ -230,18 +222,17 @@ export default function ScheduleConfigPage() {
                 </div>
                 {canManage && (
                   <div className="schedule-regime__actions">
-                    <Button size="sm" kind="ghost" renderIcon={Edit} onClick={() => openEditRegime(r)}>
+                    <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEditRegime(r)}>
                       {t('action.edit')}
                     </Button>
-                    <Button size="sm" kind="ghost" onClick={() => openEditPeriods(r)}>
+                    <Button type="text" size="small" onClick={() => openEditPeriods(r)}>
                       {t('action.editPeriods')}
                     </Button>
                     <Button
-                      size="sm"
-                      kind="ghost"
-                      hasIconOnly
-                      renderIcon={TrashCan}
-                      iconDescription={t('action.delete', { ns: 'common' })}
+                      type="text"
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      aria-label={t('action.delete', { ns: 'common' })}
                       onClick={() => setDelTarget(r)}
                     />
                   </div>
@@ -269,7 +260,7 @@ export default function ScheduleConfigPage() {
               ) : (
                 <p className="schedule-regime__empty">{t('empty.noPeriods')}</p>
               )}
-            </Tile>
+            </Card>
           ))
         )}
         <ListPagination
@@ -279,47 +270,48 @@ export default function ScheduleConfigPage() {
           onPageChange={list.setPage}
           onPageSizeChange={list.setPageSize}
         />
-      </Column>
+      </div>
 
       {/* Regime create/edit modal */}
       <Modal
         open={regimeOpen}
-        modalHeading={regimeEditId ? t('modal.regimeEdit') : t('modal.regimeCreate')}
-        primaryButtonText={t('modal.regimeSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setRegimeOpen(false)}
-        onRequestSubmit={submitRegime}
-        primaryButtonDisabled={regimeSaving}
+        title={regimeEditId ? t('modal.regimeEdit') : t('modal.regimeCreate')}
+        okText={t('modal.regimeSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setRegimeOpen(false)}
+        onOk={submitRegime}
+        confirmLoading={regimeSaving}
+        destroyOnHidden
       >
         <div className="courses-page__form">
-          <TextInput
-            id="regime-name"
-            labelText={t('regimeForm.name')}
-            placeholder={t('regimeForm.namePlaceholder')}
-            value={regimeForm.name}
-            onChange={(e) => setRegimeForm({ ...regimeForm, name: e.target.value })}
-          />
-          <Select
-            id="regime-month"
-            labelText={t('regimeForm.month')}
-            value={String(regimeForm.effectiveMonth)}
-            onChange={(e) => setRegimeForm({ ...regimeForm, effectiveMonth: Number(e.target.value) })}
-          >
-            {months.map((m, i) => (
-              <SelectItem key={i} value={String(i + 1)} text={m} />
-            ))}
-          </Select>
-          <TextInput
-            id="regime-day"
-            type="number"
-            labelText={t('regimeForm.day')}
-            min="1"
-            max="31"
-            value={regimeForm.effectiveDay}
-            onChange={(e) => setRegimeForm({ ...regimeForm, effectiveDay: e.target.value })}
-          />
+          <Field label={t('regimeForm.name')} htmlFor="regime-name">
+            <Input
+              id="regime-name"
+              placeholder={t('regimeForm.namePlaceholder')}
+              value={regimeForm.name}
+              onChange={(e) => setRegimeForm({ ...regimeForm, name: e.target.value })}
+            />
+          </Field>
+          <Field label={t('regimeForm.month')} htmlFor="regime-month">
+            <Select
+              id="regime-month"
+              value={String(regimeForm.effectiveMonth)}
+              onChange={(value) => setRegimeForm({ ...regimeForm, effectiveMonth: Number(value) })}
+              options={months.map((m, i) => ({ value: String(i + 1), label: m }))}
+            />
+          </Field>
+          <Field label={t('regimeForm.day')} htmlFor="regime-day">
+            <Input
+              id="regime-day"
+              type="number"
+              min={1}
+              max={31}
+              value={regimeForm.effectiveDay}
+              onChange={(e) => setRegimeForm({ ...regimeForm, effectiveDay: e.target.value })}
+            />
+          </Field>
           {regimeError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={regimeError} lowContrast hideCloseButton />
+            <Alert type="error" showIcon title={t('error.save')} description={regimeError} />
           )}
         </div>
       </Modal>
@@ -327,54 +319,57 @@ export default function ScheduleConfigPage() {
       {/* Periods edit modal */}
       <Modal
         open={Boolean(periodsTarget)}
-        modalHeading={t('modal.periodsTitle', { name: periodsTarget?.name ?? '' })}
-        primaryButtonText={t('modal.periodsSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setPeriodsTarget(null)}
-        onRequestSubmit={submitPeriods}
-        primaryButtonDisabled={periodsSaving}
-        size="lg"
+        title={t('modal.periodsTitle', { name: periodsTarget?.name ?? '' })}
+        okText={t('modal.periodsSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setPeriodsTarget(null)}
+        onOk={submitPeriods}
+        confirmLoading={periodsSaving}
+        destroyOnHidden
+        width={720}
       >
         <div className="courses-page__form">
           <p className="schedule-periods__hint">{t('periodsHint')}</p>
           {periodRows.map((row, i) => (
             <div key={i} className="schedule-periods__row">
-              <TextInput
-                id={`pi-${i}`}
-                type="number"
-                labelText={t('periodForm.period')}
-                min="1"
-                value={row.periodIndex}
-                onChange={(e) => updateRow(i, 'periodIndex', e.target.value)}
-              />
-              <TextInput
-                id={`st-${i}`}
-                type="time"
-                labelText={t('periodForm.start')}
-                value={row.startTime}
-                onChange={(e) => updateRow(i, 'startTime', e.target.value)}
-              />
-              <TextInput
-                id={`et-${i}`}
-                type="time"
-                labelText={t('periodForm.end')}
-                value={row.endTime}
-                onChange={(e) => updateRow(i, 'endTime', e.target.value)}
-              />
+              <Field label={t('periodForm.period')} htmlFor={`pi-${i}`}>
+                <Input
+                  id={`pi-${i}`}
+                  type="number"
+                  min={1}
+                  value={row.periodIndex}
+                  onChange={(e) => updateRow(i, 'periodIndex', e.target.value)}
+                />
+              </Field>
+              <Field label={t('periodForm.start')} htmlFor={`st-${i}`}>
+                <Input
+                  id={`st-${i}`}
+                  type="time"
+                  value={row.startTime}
+                  onChange={(e) => updateRow(i, 'startTime', e.target.value)}
+                />
+              </Field>
+              <Field label={t('periodForm.end')} htmlFor={`et-${i}`}>
+                <Input
+                  id={`et-${i}`}
+                  type="time"
+                  value={row.endTime}
+                  onChange={(e) => updateRow(i, 'endTime', e.target.value)}
+                />
+              </Field>
               <Button
-                kind="ghost"
-                size="sm"
-                hasIconOnly
-                renderIcon={TrashCan}
-                iconDescription={t('periodForm.removePeriod')}
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                aria-label={t('periodForm.removePeriod')}
                 onClick={() => setPeriodRows(periodRows.filter((_, j) => j !== i))}
               />
             </div>
           ))}
           <Button
-            kind="ghost"
-            size="sm"
-            renderIcon={Add}
+            type="text"
+            size="small"
+            icon={<PlusOutlined />}
             onClick={() =>
               setPeriodRows([
                 ...periodRows,
@@ -385,29 +380,30 @@ export default function ScheduleConfigPage() {
             {t('periodForm.addPeriod')}
           </Button>
           {periodsError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={periodsError} lowContrast hideCloseButton />
+            <Alert type="error" showIcon title={t('error.save')} description={periodsError} />
           )}
         </div>
       </Modal>
 
       {/* Delete modal */}
       <Modal
-        danger
         open={Boolean(delTarget)}
-        modalHeading={t('modal.delete')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setDelTarget(null)}
-        onRequestSubmit={handleDelete}
-        primaryButtonDisabled={deleting}
+        title={t('modal.delete')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setDelTarget(null)}
+        onOk={handleDelete}
+        confirmLoading={deleting}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
         <p className="courses-page__confirm-text">
           {t('deleteConfirm', { name: delTarget?.name })}
         </p>
         {delError && (
-          <InlineNotification kind="error" title={t('error.delete')} subtitle={delError} lowContrast hideCloseButton />
+          <Alert type="error" showIcon title={t('error.delete')} description={delError} />
         )}
       </Modal>
-    </Grid>
+    </div>
   )
 }

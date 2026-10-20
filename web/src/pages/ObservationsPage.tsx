@@ -1,45 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
-  BreadcrumbItem,
   Button,
   Checkbox,
-  Column,
-  DataTable,
-  Grid,
-  InlineNotification,
+  Input,
+  InputNumber,
   Modal,
-  NumberInput,
-  RadioButton,
-  RadioButtonGroup,
+  Radio,
   Select,
-  SelectItem,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
   Tag,
-  TextArea,
-  TextInput,
-  type DataTableHeader,
-  type TagProps,
-} from '@carbon/react'
-import { Add, Download, Edit, TrashCan, CheckmarkOutline } from '@carbon/icons-react'
+  type TableColumnsType,
+  DatePicker
+} from 'antd'
+import { CheckOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch, apiDownload } from '../auth/api'
 import ListPagination from '../components/ListPagination'
 import usePagedList from '../hooks/usePagedList'
+import Field from '../ui/Field'
 import type { Classroom, ObservationInput, ObservationView, OfferingView, Paged, Period, Regime } from '../types/api'
 
-const STATUS_KIND: Record<string, TagProps<'div'>['type']> = { draft: 'gray', submitted: 'green' }
+const STATUS_COLOR: Record<string, string> = { draft: 'default', submitted: 'green' }
 
 // ---------------------------------------------------------------------------
 // Local types for the Python-derived template schema (schema.json) served by
@@ -186,17 +172,6 @@ export default function ObservationsPage() {
   const navigate = useNavigate()
   const canWrite = can('observation:write')
   const canManage = can('observation:manage')
-
-  const headers: DataTableHeader[] = [
-    { key: 'courseName', header: t('field.courseName') },
-    { key: 'teacher', header: t('field.teacher') },
-    { key: 'teachingClassName', header: t('field.teachingClassName') },
-    { key: 'observeDate', header: t('field.observeDate') },
-    { key: 'sections', header: t('field.sections') },
-    { key: 'templateType', header: t('field.templateType') },
-    { key: 'totalScore', header: t('field.totalScore') },
-    { key: 'status', header: t('field.status') },
-  ]
 
   // Static reference data: form schema, course offerings, classrooms, periods.
   const [schema, setSchema] = useState<TemplateSchema | null>(null)
@@ -422,248 +397,273 @@ export default function ObservationsPage() {
 
   const ratingOptions = schema?.rating_options || []
 
-  const rows = list.items.map((o) => ({
-    id: String(o.id),
-    courseName: o.courseName,
-    teacher: o.teacher,
-    teachingClassName: o.teachingClassName,
-    observeDate: o.observeDate,
-    sections: sectionsLabel(o.sections),
-    templateType: templateLabel(o.templateType),
-    totalScore: fmtScore(o.totalScore),
-    status: o.status,
-  }))
-
-  const colSpan = headers.length + 1
+  const columns: TableColumnsType<ObservationView> = [
+    { title: t('field.courseName'), dataIndex: 'courseName', width: 180 },
+    { title: t('field.teacher'), dataIndex: 'teacher', width: 120 },
+    { title: t('field.teachingClassName'), dataIndex: 'teachingClassName', width: 160 },
+    { title: t('field.observeDate'), dataIndex: 'observeDate', width: 120 },
+    {
+      title: t('field.sections'),
+      dataIndex: 'sections',
+      width: 140,
+      render: (value: number[]) => sectionsLabel(value),
+    },
+    {
+      title: t('field.templateType'),
+      dataIndex: 'templateType',
+      width: 130,
+      render: (value: string) => templateLabel(value),
+    },
+    {
+      title: t('field.totalScore'),
+      dataIndex: 'totalScore',
+      width: 90,
+      render: (value: number | null | undefined) => fmtScore(value),
+    },
+    {
+      title: t('field.status'),
+      dataIndex: 'status',
+      width: 110,
+      render: (value: string) => (
+        <Tag color={STATUS_COLOR[value] ?? 'default'}>
+          {t('status.' + value, { ns: 'common', defaultValue: value })}
+        </Tag>
+      ),
+    },
+    {
+      title: t('field.actions'),
+      key: 'actions',
+      width: 300,
+      fixed: 'right',
+      render: (_, o) => {
+        const isDraft = o.status === 'draft'
+        const own = Number(currentUser?.id) === o.observerId
+        const canEdit = isDraft && (canManage || own)
+        const canSubmit = isDraft && (canManage || own)
+        const canDelete = isDraft && (canManage || own)
+        const canExport = o.status === 'submitted' && (canManage || own)
+        if (!canEdit && !canSubmit && !canExport && !canDelete) {
+          return <span className="observations-page__muted">—</span>
+        }
+        return (
+          <div className="observations-page__actions">
+            {canEdit && (
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => openEdit(o)}
+                disabled={actingId === o.id}
+              >
+                {t('action.edit', { ns: 'common' })}
+              </Button>
+            )}
+            {canSubmit && (
+              <Button
+                type="text"
+                size="small"
+                icon={<CheckOutlined />}
+                onClick={() => submitObservation(o)}
+                disabled={actingId === o.id}
+              >
+                {t('action.submit', { ns: 'common' })}
+              </Button>
+            )}
+            {canExport && (
+              <Button
+                type="text"
+                size="small"
+                icon={<DownloadOutlined />}
+                onClick={() => exportObservation(o)}
+                disabled={actingId === o.id}
+              >
+                {t('action.export', { ns: 'common' })}
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => setDeleteTarget(o)}
+                disabled={actingId === o.id}
+              >
+                {t('action.delete', { ns: 'common' })}
+              </Button>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
 
   return (
-    <Grid fullWidth className="courses-page observations-page">
-      <Column sm={4} md={8} lg={16}>
-        <Breadcrumb noTrailingSlash aria-label={t('aria.breadcrumb', { ns: 'common' })}>
-          <BreadcrumbItem
-            href="/"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/')
-            }}
-          >
-            {t('breadcrumb.home')}
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{t('breadcrumb.current')}</BreadcrumbItem>
-        </Breadcrumb>
-        <h1 className="courses-page__heading">{t('title')}</h1>
-        <p className="courses-page__subtitle">{t('subtitle')}</p>
-      </Column>
+    <div className="observations-page">
+      <Breadcrumb
+        items={[
+          {
+            title: (
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/')
+                }}
+              >
+                {t('breadcrumb.home')}
+              </a>
+            ),
+          },
+          { title: t('breadcrumb.current') },
+        ]}
+      />
+      <h1 className="observations-page__heading">{t('title')}</h1>
+      <p className="observations-page__subtitle">{t('subtitle')}</p>
 
-      <Column sm={4} md={8} lg={16}>
-        {error && (
-          <InlineNotification
-            kind="error"
-            title={t('error.action')}
-            subtitle={error}
-            lowContrast
-            hideCloseButton
-            className="courses-page__notice"
-          />
-        )}
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('error.action')}
+          description={error}
+          className="observations-page__notice"
+        />
+      )}
 
-        <div className="bookings-page__filters">
+      <div className="bookings-page__filters">
+        <Field label={t('filter.status')} htmlFor="f-status" className="bookings-page__filter">
           <Select
             id="f-status"
-            labelText={t('filter.status')}
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bookings-page__filter"
-          >
-            <SelectItem value="" text={t('filter.allStatuses')} />
-            <SelectItem value="draft" text={t('status.draft', { ns: 'common' })} />
-            <SelectItem value="submitted" text={t('status.submitted', { ns: 'common' })} />
-          </Select>
+            onChange={(value: string) => setFilterStatus(value)}
+            options={[
+              { value: '', label: t('filter.allStatuses') },
+              { value: 'draft', label: t('status.draft', { ns: 'common' }) },
+              { value: 'submitted', label: t('status.submitted', { ns: 'common' }) },
+            ]}
+          />
+        </Field>
+        <Field label={t('filter.template')} htmlFor="f-template" className="bookings-page__filter">
           <Select
             id="f-template"
-            labelText={t('filter.template')}
             value={filterTemplate}
-            onChange={(e) => setFilterTemplate(e.target.value)}
-            className="bookings-page__filter"
-          >
-            <SelectItem value="" text={t('filter.allTemplates')} />
-            {(schema?.templates || []).map((tpl) => (
-              <SelectItem key={tpl.value} value={tpl.value} text={tpl.label} />
-            ))}
-          </Select>
-        </div>
-      </Column>
+            onChange={(value: string) => setFilterTemplate(value)}
+            options={[
+              { value: '', label: t('filter.allTemplates') },
+              ...(schema?.templates || []).map((tpl) => ({ value: tpl.value, label: tpl.label })),
+            ]}
+          />
+        </Field>
+      </div>
 
-      <Column sm={4} md={8} lg={16}>
-        <DataTable rows={rows} headers={headers}>
-          {({ rows: tableRows, headers: renderedHeaders, getTableProps, getHeaderProps, getRowProps, getToolbarProps }) => (
-            <TableContainer title={t('table.title')} description={t('table.description', { count: list.total })}>
-              <TableToolbar {...getToolbarProps()}>
-                <TableToolbarContent>
-                  <TableToolbarSearch value={list.q} onChange={(e, v) => list.setQ(v ?? '')} placeholder={t('table.searchPlaceholder')} />
-                  {canWrite && (
-                    <Button renderIcon={Add} size="sm" onClick={openCreate}>
-                      {t('table.addButton')}
-                    </Button>
-                  )}
-                </TableToolbarContent>
-              </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {renderedHeaders.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                    <TableHeader>{t('field.actions')}</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{t('empty.loading')}</TableCell>
-                    </TableRow>
-                  ) : tableRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={colSpan}>{list.q ? t('empty.search') : t('empty.none')}</TableCell>
-                    </TableRow>
-                  ) : (
-                    tableRows.map((row) => {
-                      const o = list.items.find((x) => String(x.id) === String(row.id))
-                      const isDraft = o?.status === 'draft'
-                      const own = Boolean(o) && Number(currentUser?.id) === o!.observerId
-                      const canEdit = isDraft && (canManage || own)
-                      const canSubmit = isDraft && (canManage || own)
-                      const canDelete = isDraft && (canManage || own)
-                      const canExport = o?.status === 'submitted' && (canManage || own)
-                      return (
-                        <TableRow {...getRowProps({ row })}>
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === 'status') {
-                              const value = cell.value as string
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Tag type={STATUS_KIND[value] ?? 'gray'} size="sm">
-                                    {t('status.' + value, { ns: 'common', defaultValue: value })}
-                                  </Tag>
-                                </TableCell>
-                              )
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>
-                          })}
-                          <TableCell>
-                            <div className="courses-page__actions">
-                              {o && canEdit && (
-                                <Button kind="ghost" size="sm" renderIcon={Edit} onClick={() => openEdit(o)} disabled={actingId === o.id}>
-                                  {t('action.edit', { ns: 'common' })}
-                                </Button>
-                              )}
-                              {o && canSubmit && (
-                                <Button kind="ghost" size="sm" renderIcon={CheckmarkOutline} onClick={() => submitObservation(o)} disabled={actingId === o.id}>
-                                  {t('action.submit', { ns: 'common' })}
-                                </Button>
-                              )}
-                              {o && canExport && (
-                                <Button kind="ghost" size="sm" renderIcon={Download} onClick={() => exportObservation(o)} disabled={actingId === o.id}>
-                                  {t('action.export', { ns: 'common' })}
-                                </Button>
-                              )}
-                              {o && canDelete && (
-                                <Button kind="ghost" size="sm" renderIcon={TrashCan} onClick={() => setDeleteTarget(o)} disabled={actingId === o.id}>
-                                  {t('action.delete', { ns: 'common' })}
-                                </Button>
-                              )}
-                              {!canEdit && !canSubmit && !canExport && !canDelete && (
-                                <span style={{ color: 'var(--cds-text-secondary)' }}>—</span>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <ListPagination
-          page={list.page}
-          pageSize={list.pageSize}
-          totalItems={list.total}
-          onPageChange={list.setPage}
-          onPageSizeChange={list.setPageSize}
+      <div className="ds-table-toolbar">
+        <span className="ds-table-toolbar__title">{t('table.title')}</span>
+        <span className="ds-table-toolbar__hint">{t('table.description', { count: list.total })}</span>
+        <Input
+          allowClear
+          className="ds-table-toolbar__search"
+          placeholder={t('table.searchPlaceholder')}
+          value={list.q}
+          onChange={(e) => list.setQ(e.target.value)}
         />
-      </Column>
+        {canWrite && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            {t('table.addButton')}
+          </Button>
+        )}
+      </div>
+
+      <Table<ObservationView>
+        rowKey="id"
+        size="middle"
+        columns={columns}
+        dataSource={list.items}
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1200 }}
+        locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
+      />
+
+      <ListPagination
+        page={list.page}
+        pageSize={list.pageSize}
+        totalItems={list.total}
+        onPageChange={list.setPage}
+        onPageSizeChange={list.setPageSize}
+      />
 
       {/* Create / edit form */}
       <Modal
         open={formOpen}
-        size="lg"
-        modalHeading={editId ? t('modal.editHeading') : t('modal.createHeading')}
-        primaryButtonText={t('action.save', { ns: 'common' })}
-        secondaryButtonText={t('action.cancel', { ns: 'common' })}
-        onRequestClose={() => setFormOpen(false)}
-        onRequestSubmit={handleSave}
-        primaryButtonDisabled={saving}
+        width={900}
+        title={editId ? t('modal.editHeading') : t('modal.createHeading')}
+        okText={t('action.save', { ns: 'common' })}
+        cancelText={t('action.cancel', { ns: 'common' })}
+        onCancel={() => setFormOpen(false)}
+        onOk={handleSave}
+        confirmLoading={saving}
+        destroyOnHidden
         className="observations-page__form-modal"
       >
-        <div className="courses-page__form observations-page__form">
+        <div className="observations-page__form">
           {/* 基础信息 */}
           <div className="observations-page__section">
             <h3 className="observations-page__section-title">{t('section.basic')}</h3>
-            <Select
-              id="o-template"
-              labelText={t('form.templateType')}
-              value={meta.templateType}
-              onChange={(e) => {
-                setMeta({ ...meta, templateType: e.target.value })
-                setFormData(emptyFormData)
-              }}
-            >
-              <SelectItem value="" text={t('form.templatePlaceholder')} />
-              {(schema?.templates || []).map((tpl) => (
-                <SelectItem key={tpl.value} value={tpl.value} text={tpl.label} />
-              ))}
-            </Select>
-            <Select
-              id="o-course"
-              labelText={t('form.course')}
-              value={meta.courseId}
-              onChange={(e) => setMeta({ ...meta, courseId: e.target.value })}
-            >
-              <SelectItem value="" text={t('form.coursePlaceholder')} />
-              {offerings.map((o) => (
-                <SelectItem
-                  key={o.id}
-                  value={String(o.id)}
-                  text={t('courseOption', { catalogName: o.catalogName, teachingClass: o.teachingClassName, teacher: o.teacher })}
-                />
-              ))}
-            </Select>
-            <Select
-              id="o-classroom"
-              labelText={t('form.classroom')}
-              value={meta.classroomId}
-              onChange={(e) => setMeta({ ...meta, classroomId: e.target.value })}
-            >
-              <SelectItem value="" text={t('form.classroomPlaceholder')} />
-              {classrooms.map((c) => (
-                <SelectItem
-                  key={c.id}
-                  value={String(c.id)}
-                  text={c.building ? `${c.building} ${c.name}` : c.name}
-                />
-              ))}
-            </Select>
-            <TextInput
-              id="o-date"
-              type="date"
-              labelText={t('form.observeDate')}
-              value={meta.observeDate}
-              onChange={(e) => setMeta({ ...meta, observeDate: e.target.value })}
-            />
+            <Field label={t('form.templateType')} htmlFor="o-template">
+              <Select
+                id="o-template"
+                value={meta.templateType}
+                onChange={(value: string) => {
+                  setMeta({ ...meta, templateType: value })
+                  setFormData(emptyFormData)
+                }}
+                options={[
+                  { value: '', label: t('form.templatePlaceholder') },
+                  ...(schema?.templates || []).map((tpl) => ({ value: tpl.value, label: tpl.label })),
+                ]}
+              />
+            </Field>
+            <Field label={t('form.course')} htmlFor="o-course">
+              <Select
+                id="o-course"
+                value={meta.courseId}
+                onChange={(value: string) => setMeta({ ...meta, courseId: value })}
+                options={[
+                  { value: '', label: t('form.coursePlaceholder') },
+                  ...offerings.map((o) => ({
+                    value: String(o.id),
+                    label: t('courseOption', {
+                      catalogName: o.catalogName,
+                      teachingClass: o.teachingClassName,
+                      teacher: o.teacher,
+                    }),
+                  })),
+                ]}
+              />
+            </Field>
+            <Field label={t('form.classroom')} htmlFor="o-classroom">
+              <Select
+                id="o-classroom"
+                value={meta.classroomId}
+                onChange={(value: string) => setMeta({ ...meta, classroomId: value })}
+                options={[
+                  { value: '', label: t('form.classroomPlaceholder') },
+                  ...classrooms.map((c) => ({
+                    value: String(c.id),
+                    label: c.building ? `${c.building} ${c.name}` : c.name,
+                  })),
+                ]}
+              />
+            </Field>
+            <Field label={t('form.observeDate')} htmlFor="o-date">
+              <DatePicker
+                id="o-date"
+                allowClear={false}
+                value={meta.observeDate ? dayjs(meta.observeDate) : null}
+                onChange={(d) => setMeta({ ...meta, observeDate: d ? d.format('YYYY-MM-DD') : '' })}
+              />
+            </Field>
             {periods.length > 0 && (
               <fieldset className="observations-page__sections">
                 <legend className="observations-page__legend">{t('form.sectionsLegend')}</legend>
@@ -671,19 +671,21 @@ export default function ObservationsPage() {
                   <Checkbox
                     key={p.periodIndex}
                     id={`o-sec-${p.periodIndex}`}
-                    labelText={t('periodOption', { index: p.periodIndex, start: p.startTime, end: p.endTime })}
                     checked={meta.sections.includes(p.periodIndex)}
-                    onChange={(_, { checked }) => toggleSection(p.periodIndex, checked)}
-                  />
+                    onChange={(e) => toggleSection(p.periodIndex, e.target.checked)}
+                  >
+                    {t('periodOption', { index: p.periodIndex, start: p.startTime, end: p.endTime })}
+                  </Checkbox>
                 ))}
               </fieldset>
             )}
             <Checkbox
               id="o-anon"
-              labelText={t('form.anonymous')}
               checked={meta.isAnonymous}
-              onChange={(_, { checked }) => setMeta({ ...meta, isAnonymous: checked })}
-            />
+              onChange={(e) => setMeta({ ...meta, isAnonymous: e.target.checked })}
+            >
+              {t('form.anonymous')}
+            </Checkbox>
           </div>
 
           {selectedTemplate && (
@@ -703,17 +705,13 @@ export default function ObservationsPage() {
                             {line}
                           </p>
                         ))}
-                        <RadioButtonGroup
-                          name={`ind-${g.key}`}
-                          legendText={t('form.ratingLegend')}
-                          orientation="horizontal"
-                          valueSelected={formData.indicatorScores[g.key] || ''}
-                          onChange={(v) => setIndicatorScore(g.key, String(v))}
-                        >
-                          {ratingOptions.map((r) => (
-                            <RadioButton key={r.value} labelText={r.label} value={r.value} />
-                          ))}
-                        </RadioButtonGroup>
+                        <Field label={t('form.ratingLegend')}>
+                          <Radio.Group
+                            value={formData.indicatorScores[g.key] || ''}
+                            onChange={(e) => setIndicatorScore(g.key, String(e.target.value))}
+                            options={ratingOptions.map((r) => ({ value: r.value, label: r.label }))}
+                          />
+                        </Field>
                       </div>
                     )),
                   )}
@@ -725,18 +723,13 @@ export default function ObservationsPage() {
                 <div className="observations-page__section">
                   <h3 className="observations-page__section-title">{selectedTemplate.header_extra_section_title || t('sectionFallback.headerExtra')}</h3>
                   {selectedTemplate.header_extras.map((ex) => (
-                    <RadioButtonGroup
-                      key={ex.key}
-                      name={`he-${ex.key}`}
-                      legendText={ex.label}
-                      orientation="horizontal"
-                      valueSelected={formData.extraValues[ex.key] || ''}
-                      onChange={(v) => setExtraValue(ex.key, String(v))}
-                    >
-                      {(ex.options || []).map((opt) => (
-                        <RadioButton key={opt} labelText={opt} value={opt} />
-                      ))}
-                    </RadioButtonGroup>
+                    <Field key={ex.key} label={ex.label}>
+                      <Radio.Group
+                        value={formData.extraValues[ex.key] || ''}
+                        onChange={(e) => setExtraValue(ex.key, String(e.target.value))}
+                        options={(ex.options || []).map((opt) => ({ value: opt, label: opt }))}
+                      />
+                    </Field>
                   ))}
                 </div>
               )}
@@ -744,24 +737,30 @@ export default function ObservationsPage() {
               {/* 总分 + 授课内容 */}
               <div className="observations-page__section">
                 <h3 className="observations-page__section-title">{t('section.conclusion')}</h3>
-                <NumberInput
-                  id="o-score"
-                  label={selectedTemplate.score_label || t('form.scoreLabelFallback')}
-                  min={0}
-                  max={100}
-                  value={formData.totalScore}
-                  onChange={(e, { value }) => setFormData((f) => ({ ...f, totalScore: value == null ? '' : String(value) }))}
-                  allowEmpty
-                />
-                <TextArea
-                  id="o-content"
-                  labelText={selectedTemplate.content_label || t('form.contentLabelFallback')}
-                  placeholder={t('form.contentPlaceholder', { label: selectedTemplate.content_label || t('form.contentLabelFallback'), max: selectedTemplate.content_limit?.max_length || '' })}
-                  value={formData.contentOutline}
-                  onChange={(e) => setFormData((f) => ({ ...f, contentOutline: e.target.value }))}
-                  maxLength={selectedTemplate.content_limit?.max_length || undefined}
-                  rows={4}
-                />
+                <Field label={selectedTemplate.score_label || t('form.scoreLabelFallback')} htmlFor="o-score">
+                  <InputNumber
+                    id="o-score"
+                    min={0}
+                    max={100}
+                    value={formData.totalScore === '' ? null : Number(formData.totalScore)}
+                    onChange={(value) =>
+                      setFormData((f) => ({ ...f, totalScore: value == null ? '' : String(value) }))
+                    }
+                  />
+                </Field>
+                <Field
+                  label={selectedTemplate.content_label || t('form.contentLabelFallback')}
+                  htmlFor="o-content"
+                >
+                  <Input.TextArea
+                    id="o-content"
+                    placeholder={t('form.contentPlaceholder', { label: selectedTemplate.content_label || t('form.contentLabelFallback'), max: selectedTemplate.content_limit?.max_length || '' })}
+                    value={formData.contentOutline}
+                    onChange={(e) => setFormData((f) => ({ ...f, contentOutline: e.target.value }))}
+                    maxLength={selectedTemplate.content_limit?.max_length || undefined}
+                    rows={4}
+                  />
+                </Field>
               </div>
 
               {/* 评语 */}
@@ -769,16 +768,16 @@ export default function ObservationsPage() {
                 <div className="observations-page__section">
                   <h3 className="observations-page__section-title">{t('section.comments')}</h3>
                   {selectedTemplate.comment_fields.map((cf) => (
-                    <TextArea
-                      key={cf.key}
-                      id={`c-${cf.key}`}
-                      labelText={cf.label}
-                      placeholder={cf.placeholder}
-                      value={formData.comments[cf.key] || ''}
-                      onChange={(e) => setComment(cf.key, e.target.value)}
-                      maxLength={cf.max_length || undefined}
-                      rows={3}
-                    />
+                    <Field key={cf.key} label={cf.label} htmlFor={`c-${cf.key}`}>
+                      <Input.TextArea
+                        id={`c-${cf.key}`}
+                        placeholder={cf.placeholder}
+                        value={formData.comments[cf.key] || ''}
+                        onChange={(e) => setComment(cf.key, e.target.value)}
+                        maxLength={cf.max_length || undefined}
+                        rows={3}
+                      />
+                    </Field>
                   ))}
                 </div>
               )}
@@ -794,27 +793,27 @@ export default function ObservationsPage() {
                       formData.extraValues[ex.key] === ''
                     return (
                       <div key={ex.key} className="observations-page__extra">
-                        <RadioButtonGroup
-                          name={`ex-${ex.key}`}
-                          legendText={ex.label}
-                          orientation="horizontal"
-                          valueSelected={formData.extraValues[ex.key] || ''}
-                          onChange={(v) => setExtraValue(ex.key, String(v))}
-                        >
-                          {(ex.options || []).map((opt) => (
-                            <RadioButton key={opt} labelText={opt} value={opt} />
-                          ))}
-                        </RadioButtonGroup>
-                        {ex.detail_key && detailVisible && (
-                          <TextArea
-                            id={`exd-${ex.detail_key}`}
-                            labelText={t('form.extraDetailLabel', { label: ex.label })}
-                            placeholder={ex.detail_placeholder}
-                            value={formData.extraDetails[ex.detail_key] || ''}
-                            onChange={(e) => setExtraDetail(ex.detail_key ?? '', e.target.value)}
-                            maxLength={ex.detail_limit?.max_length || undefined}
-                            rows={3}
+                        <Field label={ex.label}>
+                          <Radio.Group
+                            value={formData.extraValues[ex.key] || ''}
+                            onChange={(e) => setExtraValue(ex.key, String(e.target.value))}
+                            options={(ex.options || []).map((opt) => ({ value: opt, label: opt }))}
                           />
+                        </Field>
+                        {ex.detail_key && detailVisible && (
+                          <Field
+                            label={t('form.extraDetailLabel', { label: ex.label })}
+                            htmlFor={`exd-${ex.detail_key}`}
+                          >
+                            <Input.TextArea
+                              id={`exd-${ex.detail_key}`}
+                              placeholder={ex.detail_placeholder}
+                              value={formData.extraDetails[ex.detail_key] || ''}
+                              onChange={(e) => setExtraDetail(ex.detail_key ?? '', e.target.value)}
+                              maxLength={ex.detail_limit?.max_length || undefined}
+                              rows={3}
+                            />
+                          </Field>
                         )}
                       </div>
                     )
@@ -829,16 +828,16 @@ export default function ObservationsPage() {
                     {selectedTemplate.post_content_comment_title || t('sectionFallback.postContent')}
                   </h3>
                   {selectedTemplate.post_content_comment_fields.map((cf) => (
-                    <TextArea
-                      key={cf.key}
-                      id={`pc-${cf.key}`}
-                      labelText={cf.label}
-                      placeholder={cf.placeholder}
-                      value={formData.comments[cf.key] || ''}
-                      onChange={(e) => setComment(cf.key, e.target.value)}
-                      maxLength={cf.max_length || undefined}
-                      rows={3}
-                    />
+                    <Field key={cf.key} label={cf.label} htmlFor={`pc-${cf.key}`}>
+                      <Input.TextArea
+                        id={`pc-${cf.key}`}
+                        placeholder={cf.placeholder}
+                        value={formData.comments[cf.key] || ''}
+                        onChange={(e) => setComment(cf.key, e.target.value)}
+                        maxLength={cf.max_length || undefined}
+                        rows={3}
+                      />
+                    </Field>
                   ))}
                 </div>
               )}
@@ -865,16 +864,13 @@ export default function ObservationsPage() {
                               <td key={col}>
                                 <Select
                                   id={`sf-${q.key}-${col}`}
-                                  labelText=""
-                                  hideLabel
                                   value={formData.studentFeedback[q.key]?.[col] || ''}
-                                  onChange={(e) => setStudentAnswer(q.key, col, e.target.value)}
-                                >
-                                  <SelectItem value="" text={t('form.dash')} />
-                                  {(q.options || []).map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value} text={opt.label} />
-                                  ))}
-                                </Select>
+                                  onChange={(value: string) => setStudentAnswer(q.key, col, value)}
+                                  options={[
+                                    { value: '', label: t('form.dash') },
+                                    ...(q.options || []).map((opt) => ({ value: opt.value, label: opt.label })),
+                                  ]}
+                                />
                               </td>
                             ))}
                           </tr>
@@ -888,26 +884,27 @@ export default function ObservationsPage() {
           )}
 
           {formError && (
-            <InlineNotification kind="error" title={t('error.save')} subtitle={formError} lowContrast hideCloseButton />
+            <Alert type="error" showIcon title={t('error.save')} description={formError} />
           )}
         </div>
       </Modal>
 
       {/* Delete confirm */}
       <Modal
-        danger
         open={Boolean(deleteTarget)}
-        modalHeading={t('modal.deleteHeading')}
-        primaryButtonText={t('modal.deleteSubmit')}
-        secondaryButtonText={t('action.back', { ns: 'common' })}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={deleteObservation}
-        primaryButtonDisabled={actingId === deleteTarget?.id}
+        title={t('modal.deleteHeading')}
+        okText={t('modal.deleteSubmit')}
+        cancelText={t('action.back', { ns: 'common' })}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={deleteObservation}
+        confirmLoading={actingId === deleteTarget?.id}
+        okButtonProps={{ danger: true }}
+        destroyOnHidden
       >
-        <p className="courses-page__confirm-text">
+        <p className="observations-page__confirm-text">
           {t('modal.deleteConfirm', { course: deleteTarget?.courseName, date: deleteTarget?.observeDate })}
         </p>
       </Modal>
-    </Grid>
+    </div>
   )
 }
