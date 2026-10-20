@@ -2,13 +2,13 @@
 title: Web 端
 ---
 
-Web 控制台。React 19 + Vite + IBM **Carbon Design System**,TypeScript strict 全量。前端一律用**同源相对路径** `/api/...` 调后端——开发由 Vite proxy 转发,生产由 nginx 转发,EdgeOne 由边缘函数转发,因此**没有客户端 API base URL**。
+Web 控制台。React 19 + Vite + **Ant Design**,TypeScript strict 全量。前端一律用**同源相对路径** `/api/...` 调后端——开发由 Vite proxy 转发,生产由 nginx 转发,EdgeOne 由边缘函数转发,因此**没有客户端 API base URL**。
 
 ## 技术栈
 
 - React 19 + `react-router-dom` 7 + Vite 8 + `@vitejs/plugin-react`
-- UI 库:`@carbon/react`(IBM Carbon Design System)+ `@carbon/icons-react`、`@carbon/ai-chat`,字体 IBM Plex Sans
-- Sass 样式(`src/app.scss` 全局),Carbon 主题 `g10`
+- UI 库:`antd` 6(Ant Design)+ `@ant-design/icons`;图表 `@ant-design/charts`,AI 对话 `@ant-design/x`;字体用系统 UI 栈(不再引入 IBM Plex)
+- Sass 样式(`src/app.scss` 全局);主题走 Ant Design 主题算法 + `--cds-*` token 桥(`g10` 浅色 / `g100` 深色 / 跟随系统)
 - **TypeScript strict 全量**(`allowJs` 已关);API 类型引生成的 `src/types/api.d.ts`(见 `gen:types` 脚本),**不要手写接口类型**
 - 内置 i18n(`src/i18n`:LanguageProvider + locales);状态层仅 `AuthContext`,无外部状态库
 - Node ≥ 20.19

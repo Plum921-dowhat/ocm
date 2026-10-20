@@ -2395,8 +2395,8 @@ body {
 
 // --- Ant Design migration ---------------------------------------------------
 // Styles for the components migrated off Carbon. Everything below uses Ant
-// Design's class names or the project's own `ds-` namespace, so it can be
-// removed cleanly once the last Carbon import is gone.
+// Design's class names or the project's own `ds-` namespace; Carbon is no
+// longer imported anywhere, so nothing here depends on it.
 
 .app-shell {
   min-block-size: 100vh;

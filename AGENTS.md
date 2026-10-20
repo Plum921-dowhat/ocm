@@ -74,7 +74,7 @@ Classroom management system: Go backend + WeChat mini-program (小程序) + web 
 
 - **TypeScript strict 全量落地**:src 下无 `.js/.jsx`(`allowJs` 已关),新文件一律 `.ts/.tsx`。
 - 页面数据类型一律引 `web/src/types/api.ts` 的导出别名(生成 schema 的 re-export);手写补集仅限 `ApiError`/`Paged<T>`/`Permission`(前端 `can()` 的联合类型,比生成的 `string[]` 严)与极少数非 Go 源头的类型(如 observations 模板 schema——Python 衍生,见 ObservationsPage 本地类型)。
-- Carbon DataTable 行必须有 string `id`:wire 无 id 的记录显式派生(`{...r, id: String(r.userId)}`),这是类型锁死的模式。`getHeaderProps`/`getRowProps` spread 自带 key,勿再传显式 `key`(TS2783)。
-- Carbon 组件常见坑:Tag 无 `yellow` 色;`DatePickerInput` 不收 `value`(受控值放父 `DatePicker`);`MultiSelect` 无 `selection` prop,弹窗内表单回显必须用受控 `selectedItems`——Carbon Modal 的 children 常驻挂载(仅切 `is-visible` class,不随 open 重挂载),`initialSelectedItems` 仅组件挂载时生效,弹窗打开后异步加载的数据它不感知;`Dropdown` 的 `titleText` 为必填 prop,非空会渲染可见 `<label>`(页面已有自定义 label 时传 `""`,组件默认即空串、空值短路不渲染);`InlineNotification` 无 `actions` prop(用 `ActionableNotification`);charts 的 `scaleType` 须用 `ScaleTypes` 枚举(字符串字面量不过检)。
+- 表格 `dataSource` 先归一成数组:后端 Go 的 nil slice 会序列化成 `null`,先 `?? []` 再用 `.length` / `.map`,否则整页白屏(考勤报表踩过)。每张表给稳定 `rowKey`(`rowKey="id"` 或 `(r) => String(r.userId)`),不要用下标,否则排序/筛选后行状态错位。
+- Ant Design 6 常见坑:`Button.iconPosition` 改名 `iconPlacement`、`Alert.message` 改名 `title`、`Drawer.width` 改名 `size`(`Sider` 仍用 `width`);`@ant-design/charts` 的 `theme` 必须传对象 `{{ type: 'classicDark' }}`,传字符串整图空白;`Modal` 的 children 首次打开后常驻,弹窗表单回显要用受控值(异步数据不会重放 `defaultValue`)。
 - `npm --prefix web run typecheck` 为类型门禁;`build` 已含 `tsc --noEmit`。
 - 本地无 PostgreSQL:后端业务路由等 DB 连通后才注册,冒烟看 `/healthz` 与 `/swagger/`;本地启动后端需 `APP_ENV=development`(注意不是 dev)。要跑集成测试就起一个临时 PG:`docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=root postgres:17-alpine`,再 `DB_TEST_POSTGRES_DSN='postgres://postgres:root@127.0.0.1:5432/postgres?sslmode=disable' go test -tags=integration ./internal/db/...`。
