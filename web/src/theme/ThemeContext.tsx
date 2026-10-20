@@ -13,15 +13,16 @@ import {
 // colour mode, so this context owns the single source of truth and exposes:
 //
 //   - `preference`  what the user picked (system | a concrete theme name)
-//   - `theme`       the resolved Carbon theme, applied as a `cds--<name>`
-//                   class on <html> (still needed by the pages that have not
-//                   been migrated off @carbon/react yet)
+//   - `theme`       the resolved theme name, applied as a `cds--<name>` class
+//                   on <html>; app.scss keys its light/dark token bridge off
+//                   those classes, so the names are kept even though Carbon
+//                   itself is gone
 //   - `colorScheme` the same decision reduced to light/dark, consumed by the
 //                   Ant Design ConfigProvider (see theme/AntdProvider.tsx)
 //
 // `white`/`g10` are both light and `g90`/`g100` are both dark, so the two
-// systems never disagree. Carbon's prebuilt CSS ships all four token sets
-// under the cds-- classes, so switching never touches the build.
+// systems never disagree. The four names stay accepted for stored preferences;
+// the picker only offers system/light/dark.
 export const THEME_NAMES = ['white', 'g10', 'g90', 'g100'] as const
 export type ThemeName = (typeof THEME_NAMES)[number]
 
@@ -40,7 +41,7 @@ const LEGACY_CHOICES: Record<string, ThemeChoice> = {
   g90: 'g100',
 }
 
-/** Colour mode shared by Carbon (via cds-- classes) and Ant Design. */
+/** Colour mode shared by the `cds--` token bridge and Ant Design. */
 export type ColorScheme = 'light' | 'dark'
 
 const DARK_THEMES: ReadonlySet<ThemeName> = new Set<ThemeName>(['g90', 'g100'])

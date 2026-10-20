@@ -1,5 +1,69 @@
-@use '@carbon/styles/scss/spacing' as *;
-@use '@carbon/styles/scss/type' as *;
+// --- Local design tokens -----------------------------------------------------
+// The page styles were written against Carbon's Sass helpers. They are defined
+// here (same names, same scale) so the stylesheet no longer needs
+// @carbon/styles: removing the dependency cannot change any spacing value.
+
+$spacing-01: 0.125rem; // 2px
+$spacing-02: 0.25rem; // 4px
+$spacing-03: 0.5rem; // 8px
+$spacing-04: 0.75rem; // 12px
+$spacing-05: 1rem; // 16px
+$spacing-06: 1.5rem; // 24px
+$spacing-07: 2rem; // 32px
+$spacing-08: 2.5rem; // 40px
+$spacing-09: 3rem; // 48px
+
+// type-style mirrors the Carbon scale but is expressed in the Ant Design
+// weights/sizes the rest of the console uses.
+@mixin type-style($name) {
+  @if $name == 'body-01' {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 400;
+  } @else if $name == 'body-short-01' {
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    font-weight: 400;
+  } @else if $name == 'code-02' {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  } @else if $name == 'heading-01' {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+  } @else if $name == 'heading-02' {
+    font-size: 1rem;
+    line-height: 1.375rem;
+    font-weight: 600;
+  } @else if $name == 'heading-03' {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+  } @else if $name == 'heading-05' {
+    font-size: 1.75rem;
+    line-height: 2.25rem;
+    font-weight: 600;
+  } @else if $name == 'helper-text-01' {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+  } @else if $name == 'label-01' {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+  } @else if $name == 'productive-heading-01' {
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    font-weight: 600;
+  } @else if $name == 'productive-heading-04' {
+    font-size: 1.75rem;
+    line-height: 2.25rem;
+    font-weight: 600;
+  } @else {
+    @error 'Unknown type style: #{$name}';
+  }
+}
 
 // --- Design tokens -----------------------------------------------------------
 // The page styles in this file were written against Carbon's custom properties.
@@ -1903,62 +1967,250 @@ body {
   }
 }
 
-// --- AI 助手 (Carbon AI Chat 浮窗,自定义 user_defined 项) ---
+// --- AI 助手 (Ant Design X 浮窗) ----------------------------------------------
 
-.ai-chat-item__tools {
+// A compact panel anchored to the bottom-right corner, the same footprint the
+// Carbon widget used (380 × 640 max). A full-height drawer covered a whole
+// column of the table, which is too much for an assistant that is opened
+// while working on a page. Fixed positioning keeps it out of the layout flow.
+.ai-chat {
+  position: fixed;
+  inset-inline-end: $spacing-07;
+  inset-block-end: $spacing-07;
+  z-index: 1100;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  inline-size: 384px;
+  block-size: calc(100vh - 2 * #{$spacing-07});
+  max-block-size: 620px;
+  overflow: hidden;
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: 12px;
+  background: var(--cds-layer-01);
+  box-shadow:
+    0 12px 32px rgba(31, 35, 41, 0.16),
+    0 2px 8px rgba(31, 35, 41, 0.08);
+  animation: ai-chat-in 180ms cubic-bezier(0, 0, 0.3, 1) both;
+}
+
+@supports (block-size: 100dvh) {
+  .ai-chat {
+    block-size: calc(100dvh - 2 * #{$spacing-07});
+  }
+}
+
+@keyframes ai-chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+  .ai-chat {
+    animation: none;
+  }
+}
+
+// Below the tablet breakpoint the panel becomes a full-screen sheet: 384px
+// would leave no page behind it anyway.
+@media screen and (max-width: 640px) {
+  .ai-chat {
+    inset: 0;
+    inline-size: auto;
+    block-size: 100vh;
+    max-block-size: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  @supports (block-size: 100dvh) {
+    .ai-chat {
+      block-size: 100dvh;
+    }
+  }
+}
+
+.ai-chat__launcher {
+  inset-inline-end: $spacing-06;
+  inset-block-end: $spacing-06;
+}
+
+.ai-chat__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-03;
+  padding: $spacing-03 $spacing-03 $spacing-03 $spacing-05;
+  border-block-end: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+}
+
+.ai-chat__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ai-chat__title {
+  display: flex;
+  align-items: center;
+  gap: $spacing-03;
+  font-weight: 600;
+}
+
+.ai-chat__badge {
+  margin-inline-end: 0;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--cds-text-secondary);
+}
+
+.ai-chat__avatar {
+  background: #e8f0ff;
+  color: #2b5ff6;
+}
+
+.ai-chat__avatar--ai {
+  background: #2b5ff6;
+  color: #fff;
+}
+
+.ai-chat__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+  background: var(--cds-background);
+}
+
+.ai-chat__empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: $spacing-06;
+  padding: $spacing-06 $spacing-05;
+  overflow-y: auto;
+}
+
+.ai-chat__welcome-icon {
+  font-size: 40px;
+  color: #2b5ff6;
+}
+
+.ai-chat__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding: $spacing-05 $spacing-05 $spacing-03;
+  overflow-y: auto;
+}
+
+.ai-chat__bubble {
+  max-inline-size: 100%;
+}
+
+.ai-chat__answer {
+  display: flex;
+  flex-direction: column;
   gap: $spacing-03;
 }
 
-.ai-chat-item__tool-spinner {
-  display: inline-block;
-  margin-inline-end: $spacing-03;
-  vertical-align: middle;
+.ai-chat__text {
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.ai-chat-item__proposal {
-  margin-block-start: $spacing-03;
-  padding: $spacing-04 $spacing-05;
-  border: 1px solid var(--cds-border-subtle);
-  border-radius: $spacing-03;
-  background: var(--cds-layer-01);
+.ai-chat__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-02;
+
+  .ant-tag {
+    margin-inline-end: 0;
+  }
+}
+
+.ai-chat__stopped {
+  margin: 0;
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+}
+
+.ai-chat__proposal {
   display: flex;
   flex-direction: column;
   gap: $spacing-04;
+  padding: $spacing-04 $spacing-05;
+  border: 1px solid var(--cds-border-subtle);
+  border-radius: 8px;
+  background: var(--cds-layer-01);
 }
 
-.ai-chat-item__proposal-title {
+.ai-chat__proposal-title {
   @include type-style('heading-02');
   margin: 0;
 }
 
-.ai-chat-item__proposal-fields {
-  @include type-style('body-01');
-  display: flex;
-  flex-wrap: wrap;
-  gap: $spacing-05;
-  color: var(--cds-text-secondary);
+.ai-chat__proposal-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-03 $spacing-05;
+  margin: 0;
 
-  span {
-    color: var(--cds-text-primary);
+  dt {
+    @include type-style('helper-text-01');
+    color: var(--cds-text-secondary);
+  }
+
+  dd {
+    margin: 2px 0 0;
+    @include type-style('body-01');
   }
 }
 
-.ai-chat-item__proposal-actions {
+.ai-chat__proposal-purpose {
+  grid-column: 1 / -1;
+}
+
+.ai-chat__proposal-actions {
   display: flex;
   gap: $spacing-03;
 }
 
-.ai-chat-item__proposal-dismissed {
+.ai-chat__proposal-link {
+  white-space: nowrap;
+}
+
+.ai-chat__proposal-dismissed {
+  margin: 0;
   @include type-style('body-01');
   color: var(--cds-text-secondary);
+}
+
+.ai-chat__conflict {
   margin: 0;
 }
 
-.ai-chat-item__proposal-success {
-  @include type-style('body-01');
-  margin: 0;
+.ai-chat__composer {
+  padding: $spacing-04 $spacing-05 $spacing-03;
+  border-block-start: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+}
+
+.ai-chat__disclaimer {
+  margin: $spacing-02 0 0;
+  @include type-style('helper-text-01');
+  color: var(--cds-text-secondary);
+  text-align: center;
 }
 
 /* ---- observations page (听课评课) ---- */

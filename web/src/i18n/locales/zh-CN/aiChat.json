@@ -1,5 +1,11 @@
 {
   "assistantName": "AI 助手",
+  "badge": "AI",
+  "newChat": "新对话",
+  "close": "关闭",
+  "starterTitle": "试试这样问",
+  "stopped": "已停止生成",
+  "disclaimer": "内容由 AI 生成，请核对后使用。",
   "strings": {
     "input_placeholder": "例如：周一 5-7 节有哪些可容纳 50 人的空闲教室？",
     "input_ariaLabel": "向 AI 助手提问",
@@ -42,7 +48,8 @@
   },
   "error": {
     "fallback": "AI 助手暂时无法回答，请稍后重试",
-    "bookingConflict": "该教室该时段已被占用，请重新选择"
+    "bookingConflict": "该教室该时段已被占用，请重新选择",
+    "title": "回答失败"
   },
   "conflict": {
     "title": "该时段存在 {{count}} 项冲突",
@@ -60,11 +67,11 @@
     "successTitle": "已提交预约，等待管理员审批",
     "successLink": "查看预约",
     "failedTitle": "预约提交失败",
-    "field": {
-      "classroom": "教室：{{value}}",
-      "date": "日期：{{value}}",
-      "period": "节次：{{value}}",
-      "purpose": "用途：{{value}}"
+    "fieldLabel": {
+      "classroom": "教室",
+      "date": "日期",
+      "period": "节次",
+      "purpose": "用途"
     }
   }
 }

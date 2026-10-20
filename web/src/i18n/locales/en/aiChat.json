@@ -1,5 +1,11 @@
 {
   "assistantName": "AI assistant",
+  "badge": "AI",
+  "newChat": "New chat",
+  "close": "Close",
+  "starterTitle": "Try asking",
+  "stopped": "Generation stopped",
+  "disclaimer": "AI-generated content. Verify before use.",
   "strings": {
     "input_placeholder": "e.g. Which free classrooms seat 50+ during Mon periods 5–7?",
     "input_ariaLabel": "Ask the AI assistant",
@@ -42,7 +48,8 @@
   },
   "error": {
     "fallback": "The AI assistant can't answer right now, please try again",
-    "bookingConflict": "That classroom is already booked for this slot, please choose another"
+    "bookingConflict": "That classroom is already booked for this slot, please choose another",
+    "title": "Answer failed"
   },
   "conflict": {
     "title": "{{count}} conflict(s) in this slot",
@@ -60,11 +67,11 @@
     "successTitle": "Booking submitted, awaiting admin approval",
     "successLink": "View bookings",
     "failedTitle": "Booking submission failed",
-    "field": {
-      "classroom": "Classroom: {{value}}",
-      "date": "Date: {{value}}",
-      "period": "Period: {{value}}",
-      "purpose": "Purpose: {{value}}"
+    "fieldLabel": {
+      "classroom": "Classroom",
+      "date": "Date",
+      "period": "Period",
+      "purpose": "Purpose"
     }
   }
 }

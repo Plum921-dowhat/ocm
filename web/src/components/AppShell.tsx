@@ -260,9 +260,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </Layout>
       </Layout>
 
-      {/* The Carbon AI chat renders a host element inline. It must stay
-          outside the Layout: as a flex child of Layout it would claim width
-          and squeeze the content area to zero. It positions itself fixed. */}
+      {/* The assistant renders a fixed-position panel mounted here, once, so it
+          survives page navigation (its state lives in ai/chatStore). It must
+          stay outside the Layout: as a flex child it would claim width and
+          squeeze the content area to zero. */}
       {can('ai:chat') && (
         <Suspense fallback={null}>
           <AiChat />

@@ -1,16 +1,10 @@
 import { useState } from 'react'
+import { Alert, Button, Spin, Tag } from 'antd'
+import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
-import { Button, InlineNotification, Loading, Tag, type TagProps } from '@carbon/react'
 import { useTranslation } from 'react-i18next'
-import type { RenderUserDefinedState } from '@carbon/ai-chat'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
-
-type TagKind = TagProps<'div'>['type']
-
-// These components render inside Carbon AI Chat's user_defined slots. The chat
-// renders them through a React portal from the app tree, so contexts
-// (useAuth, useTranslation) and the global Carbon styles apply normally.
 
 // The backend's SSE 'tool' events (internal/ai agent.go).
 export interface AiTool {
@@ -44,34 +38,33 @@ export interface AiProposal {
   error: string
 }
 
-// The two user_defined payloads this app streams (see AiChat's chunk mapping).
-export type AiUserDefined =
-  | { user_defined_type: 'ai_tools'; tools: AiTool[] }
-  | { user_defined_type: 'ai_proposal'; proposal: AiProposal }
-
-function ToolIndicator({ tools }: { tools?: AiTool[] }) {
+// ToolIndicator renders the tools the assistant called while answering. It is
+// an inline strip above the answer text, so it stays compact: one tag per tool,
+// with a spinner only while that tool is running.
+export function ToolIndicator({ tools }: { tools?: AiTool[] }) {
   const { t } = useTranslation('aiChat')
   if (!tools || tools.length === 0) return null
   return (
-    <div className="ai-chat-item__tools">
+    <div className="ai-chat__tools">
       {tools.map((tool, i) => {
         const label = t('tools.' + tool.name, { defaultValue: tool.name })
-        let type: TagKind = 'cyan'
-        let text = t('tool.running', { label })
-        let spinning = true
-        if (tool.status === 'ok') {
-          type = 'green'
-          text = t('tool.ok', { label })
-          spinning = false
-        } else if (tool.status === 'error') {
-          type = 'red'
-          text = t('tool.error', { label })
-          spinning = false
+        if (tool.status === 'running') {
+          return (
+            <Tag key={`${tool.name}-${i}`} color="processing" icon={<Spin size="small" />}>
+              {t('tool.running', { label })}
+            </Tag>
+          )
+        }
+        if (tool.status === 'error') {
+          return (
+            <Tag key={`${tool.name}-${i}`} color="error" icon={<CloseCircleFilled />}>
+              {t('tool.error', { label })}
+            </Tag>
+          )
         }
         return (
-          <Tag key={`${tool.name}-${i}`} type={type} size="sm">
-            {spinning && <Loading small withOverlay={false} className="ai-chat-item__tool-spinner" />}
-            {text}
+          <Tag key={`${tool.name}-${i}`} color="success" icon={<CheckCircleFilled />}>
+            {t('tool.ok', { label })}
           </Tag>
         )
       })}
@@ -89,12 +82,12 @@ function ConflictNote({ conflicts }: { conflicts?: AiConflict[] }) {
     return t('conflict.item', { kind, start: c.periodStart, end: c.periodEnd, course, name })
   })
   return (
-    <InlineNotification
-      kind="warning"
-      lowContrast
-      hideCloseButton
+    <Alert
+      className="ai-chat__conflict"
+      type="warning"
+      showIcon
       title={t('conflict.title', { count: conflicts.length })}
-      subtitle={items.join(t('conflict.join'))}
+      description={items.join(t('conflict.join'))}
     />
   )
 }
@@ -103,14 +96,16 @@ function ConflictNote({ conflicts }: { conflicts?: AiConflict[] }) {
 // confirmation state machine: proposed -> submitting -> confirmed / failed, or
 // dismissed. The confirm button submits through the existing booking API,
 // which re-validates permissions and conflicts server-side.
-function ProposalCard({ proposal }: { proposal: AiProposal }) {
+export function ProposalCard({ proposal }: { proposal: AiProposal }) {
   const { t } = useTranslation('aiChat')
   const { token } = useAuth()
-  const [state, setState] = useState<'proposed' | 'submitting' | 'confirmed' | 'failed' | 'dismissed'>('proposed')
+  const [state, setState] = useState<'proposed' | 'submitting' | 'confirmed' | 'failed' | 'dismissed'>(
+    proposal.state === 'dismissed' ? 'dismissed' : 'proposed',
+  )
   const [error, setError] = useState('')
 
   if (state === 'dismissed') {
-    return <p className="ai-chat-item__proposal-dismissed">{t('proposal.dismissed')}</p>
+    return <p className="ai-chat__proposal-dismissed">{t('proposal.dismissed')}</p>
   }
 
   const confirm = async () => {
@@ -135,55 +130,50 @@ function ProposalCard({ proposal }: { proposal: AiProposal }) {
   }
 
   return (
-    <div className="ai-chat-item__proposal">
-      <h3 className="ai-chat-item__proposal-title">{t('proposal.title')}</h3>
-      <div className="ai-chat-item__proposal-fields">
-        <span>{t('proposal.field.classroom', { value: proposal.payload.classroomName })}</span>
-        <span>{t('proposal.field.date', { value: proposal.payload.date })}</span>
-        <span>{t('proposal.field.period', { value: proposal.payload.periodLabel })}</span>
-        <span>{t('proposal.field.purpose', { value: proposal.payload.purpose })}</span>
-      </div>
+    <div className="ai-chat__proposal">
+      <h3 className="ai-chat__proposal-title">{t('proposal.title')}</h3>
+      <dl className="ai-chat__proposal-fields">
+        <div>
+          <dt>{t('proposal.fieldLabel.classroom')}</dt>
+          <dd>{proposal.payload.classroomName}</dd>
+        </div>
+        <div>
+          <dt>{t('proposal.fieldLabel.date')}</dt>
+          <dd>{proposal.payload.date}</dd>
+        </div>
+        <div>
+          <dt>{t('proposal.fieldLabel.period')}</dt>
+          <dd>{proposal.payload.periodLabel}</dd>
+        </div>
+        <div className="ai-chat__proposal-purpose">
+          <dt>{t('proposal.fieldLabel.purpose')}</dt>
+          <dd>{proposal.payload.purpose}</dd>
+        </div>
+      </dl>
       {state === 'proposed' && <ConflictNote conflicts={proposal.payload.conflicts} />}
       {state === 'confirmed' && (
-        // InlineNotification forbids interactive children (its dev assertion
-        // throws and unmounts the whole app), so the link sits below it.
-        <>
-          <InlineNotification kind="success" lowContrast hideCloseButton title={t('proposal.successTitle')} />
-          <p className="ai-chat-item__proposal-success">
-            <Link to="/bookings">{t('proposal.successLink')}</Link>
-          </p>
-        </>
+        <Alert
+          type="success"
+          showIcon
+          title={t('proposal.successTitle')}
+          action={
+            <Link to="/bookings" className="ai-chat__proposal-link">
+              {t('proposal.successLink')}
+            </Link>
+          }
+        />
       )}
-      {state === 'failed' && (
-        <InlineNotification kind="error" lowContrast hideCloseButton title={t('proposal.failedTitle')} subtitle={error} />
-      )}
+      {state === 'failed' && <Alert type="error" showIcon title={t('proposal.failedTitle')} description={error} />}
       {(state === 'proposed' || state === 'submitting') && (
-        <div className="ai-chat-item__proposal-actions">
-          <Button size="sm" kind="primary" disabled={state === 'submitting'} onClick={confirm}>
+        <div className="ai-chat__proposal-actions">
+          <Button type="primary" size="small" loading={state === 'submitting'} onClick={confirm}>
             {state === 'submitting' ? t('proposal.confirming') : t('proposal.confirm')}
           </Button>
-          <Button size="sm" kind="ghost" disabled={state === 'submitting'} onClick={() => setState('dismissed')}>
+          <Button size="small" disabled={state === 'submitting'} onClick={() => setState('dismissed')}>
             {t('action.cancel', { ns: 'common' })}
           </Button>
         </div>
       )}
     </div>
   )
-}
-
-// renderAiCustomItem maps the assistant's user_defined message items to React
-// components. Called by Carbon AI Chat on every rerender: keep it side-effect
-// free. During streaming messageItem is not set yet - fall back to the newest
-// partial chunk. The payload shape is this app's own contract, so the library's
-// generic item is narrowed to AiUserDefined here.
-export default function renderAiCustomItem(renderState: RenderUserDefinedState) {
-  const item = renderState?.messageItem ?? renderState?.partialItems?.at(-1)
-  const userDefined = item?.user_defined as AiUserDefined | undefined
-  if (userDefined?.user_defined_type === 'ai_tools') {
-    return <ToolIndicator tools={userDefined.tools} />
-  }
-  if (userDefined?.user_defined_type === 'ai_proposal') {
-    return <ProposalCard proposal={userDefined.proposal} />
-  }
-  return null
 }

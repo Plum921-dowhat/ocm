@@ -1,6 +1,5 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import '@carbon/styles/css/styles.css'
 import './app.scss'
 import './i18n/index'
 import { brandTitle } from './brand'
