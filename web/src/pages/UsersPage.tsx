@@ -294,37 +294,37 @@ export default function UsersPage() {
   const catalogGroups = groupCatalog(grantCatalog)
 
   const columns: TableColumnsType<User> = [
-    { title: t('field.id'), dataIndex: 'id', width: 72 },
-    { title: t('field.username'), dataIndex: 'username', width: 160 },
-    { title: t('field.displayName'), dataIndex: 'displayName', width: 160 },
+    { title: t('field.id'), dataIndex: 'id', width: 64 },
+    { title: t('field.username'), dataIndex: 'username', width: 140 },
+    { title: t('field.displayName'), dataIndex: 'displayName', width: 140 },
     {
       title: t('field.type'),
       dataIndex: 'type',
-      width: 110,
+      width: 100,
       render: (value: string) => <Tag color={typeColor(value)}>{t('type.' + value, { defaultValue: value })}</Tag>,
     },
     {
       title: t('field.roles'),
       dataIndex: 'roles',
-      width: 220,
+      width: 190,
       render: (items: RoleBrief[]) => <TagList items={items} />,
     },
     {
       title: t('field.groups'),
       dataIndex: 'groups',
-      width: 200,
+      width: 170,
       render: (items: GroupBrief[]) => <TagList items={items} />,
     },
     {
       title: t('field.createdAt'),
       dataIndex: 'createdAt',
-      width: 170,
+      width: 150,
       render: (value: string) => formatDate(value),
     },
     {
       title: t('field.actions'),
       key: 'actions',
-      width: 168,
+      width: 160,
       fixed: 'right',
       render: (_, u) =>
         canManage ? (
@@ -369,6 +369,7 @@ export default function UsersPage() {
   return (
     <div className="users-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -417,7 +418,7 @@ export default function UsersPage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1180 }}
+        scroll={{ x: 1120 }}
         locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
       />
 

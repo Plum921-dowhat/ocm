@@ -104,22 +104,22 @@ export default function IotDevicesPage() {
     {
       title: t('field.name'),
       dataIndex: 'name',
-      width: 170,
+      width: 150,
       render: (value: string) => value || '—',
     },
-    { title: t('field.externalId'), dataIndex: 'externalId', width: 170 },
-    { title: t('field.category'), dataIndex: 'category', width: 130 },
-    { title: t('field.sourceId'), dataIndex: 'sourceId', width: 130 },
+    { title: t('field.externalId'), dataIndex: 'externalId', width: 150 },
+    { title: t('field.category'), dataIndex: 'category', width: 110 },
+    { title: t('field.sourceId'), dataIndex: 'sourceId', width: 110 },
     {
       title: t('field.classroom'),
       key: 'classroom',
-      width: 200,
+      width: 170,
       render: (_, d) => classroomLabel(d.classroomId),
     },
     {
       title: t('field.status'),
       dataIndex: 'status',
-      width: 110,
+      width: 100,
       render: (value: string) => (
         <Tag color={STATUS_COLOR[value] ?? 'default'}>{t('status.' + value, { defaultValue: value })}</Tag>
       ),
@@ -127,13 +127,13 @@ export default function IotDevicesPage() {
     {
       title: t('field.lastSeenAt'),
       dataIndex: 'lastSeenAt',
-      width: 180,
+      width: 150,
       render: (value: string | undefined) => (value ? formatDateTime(value) : '—'),
     },
     {
       title: t('field.actions'),
       key: 'actions',
-      width: 200,
+      width: 170,
       fixed: 'right',
       render: (_, d) => (
         <div className="classrooms-page__actions">
@@ -158,6 +158,7 @@ export default function IotDevicesPage() {
   return (
     <div className="classrooms-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -217,7 +218,7 @@ export default function IotDevicesPage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1115 }}
         locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
       />
 

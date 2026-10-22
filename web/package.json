@@ -11,6 +11,7 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "node scripts/check-table-widths.mjs",
     "gen:types": "swagger2openapi ../backend/docs/swagger.json -o .openapi.json && openapi-typescript .openapi.json -o src/types/api.d.ts"
   },
   "dependencies": {

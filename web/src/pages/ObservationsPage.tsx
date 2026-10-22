@@ -398,32 +398,32 @@ export default function ObservationsPage() {
   const ratingOptions = schema?.rating_options || []
 
   const columns: TableColumnsType<ObservationView> = [
-    { title: t('field.courseName'), dataIndex: 'courseName', width: 180 },
-    { title: t('field.teacher'), dataIndex: 'teacher', width: 120 },
-    { title: t('field.teachingClassName'), dataIndex: 'teachingClassName', width: 160 },
-    { title: t('field.observeDate'), dataIndex: 'observeDate', width: 120 },
+    { title: t('field.courseName'), dataIndex: 'courseName', width: 140 },
+    { title: t('field.teacher'), dataIndex: 'teacher', width: 90 },
+    { title: t('field.teachingClassName'), dataIndex: 'teachingClassName', width: 130 },
+    { title: t('field.observeDate'), dataIndex: 'observeDate', width: 100 },
     {
       title: t('field.sections'),
       dataIndex: 'sections',
-      width: 140,
+      width: 110,
       render: (value: number[]) => sectionsLabel(value),
     },
     {
       title: t('field.templateType'),
       dataIndex: 'templateType',
-      width: 130,
+      width: 100,
       render: (value: string) => templateLabel(value),
     },
     {
       title: t('field.totalScore'),
       dataIndex: 'totalScore',
-      width: 90,
+      width: 70,
       render: (value: number | null | undefined) => fmtScore(value),
     },
     {
       title: t('field.status'),
       dataIndex: 'status',
-      width: 110,
+      width: 90,
       render: (value: string) => (
         <Tag color={STATUS_COLOR[value] ?? 'default'}>
           {t('status.' + value, { ns: 'common', defaultValue: value })}
@@ -501,6 +501,7 @@ export default function ObservationsPage() {
   return (
     <div className="observations-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -581,7 +582,7 @@ export default function ObservationsPage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1135 }}
         locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
       />
 

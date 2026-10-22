@@ -193,22 +193,22 @@ export default function ClassroomsPage() {
   }
 
   const columns: TableColumnsType<Classroom> = [
-    { title: t('field.id'), dataIndex: 'id', width: 72 },
-    { title: t('field.name'), dataIndex: 'name', width: 160 },
-    { title: t('field.building'), dataIndex: 'building', width: 140 },
-    { title: t('field.capacity'), dataIndex: 'capacity', width: 96 },
+    { title: t('field.id'), dataIndex: 'id', width: 64 },
+    { title: t('field.name'), dataIndex: 'name', width: 150 },
+    { title: t('field.building'), dataIndex: 'building', width: 120 },
+    { title: t('field.capacity'), dataIndex: 'capacity', width: 80 },
     {
       title: t('field.type'),
       dataIndex: 'type',
-      width: 130,
+      width: 110,
       render: (value: string) => t('type.' + value, { defaultValue: value }),
     },
-    { title: t('field.floor'), dataIndex: 'floor', width: 90 },
-    { title: t('field.campus'), dataIndex: 'campus', width: 120 },
+    { title: t('field.floor'), dataIndex: 'floor', width: 70 },
+    { title: t('field.campus'), dataIndex: 'campus', width: 110 },
     {
       title: t('field.status'),
       dataIndex: 'status',
-      width: 110,
+      width: 100,
       render: (value: string) => (
         <Tag color={STATUS_COLOR[value] ?? 'default'}>
           {t('status.' + value, { ns: 'common', defaultValue: value })}
@@ -218,7 +218,7 @@ export default function ClassroomsPage() {
     {
       title: t('field.createdAt'),
       dataIndex: 'createdAt',
-      width: 170,
+      width: 150,
       render: (value: string) => formatDate(value),
     },
   ]
@@ -227,7 +227,7 @@ export default function ClassroomsPage() {
     columns.push({
       title: t('field.actions'),
       key: 'actions',
-      width: 108,
+      width: 100,
       fixed: 'right',
       render: (_, c) => (
         <div className="classrooms-page__actions">
@@ -327,6 +327,7 @@ export default function ClassroomsPage() {
   return (
     <div className="classrooms-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -376,7 +377,7 @@ export default function ClassroomsPage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1060 }}
         locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
       />
 

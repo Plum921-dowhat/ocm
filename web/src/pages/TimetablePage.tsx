@@ -90,6 +90,7 @@ export default function TimetablePage() {
   return (
     <div className="courses-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
