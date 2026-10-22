@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { aiChatState } from './chatInstance'
 import { ProposalCard, ToolIndicator } from './aiChatItems'
+import MessageMarkdown from './MessageMarkdown'
 import {
   abortChat,
   bindChatOwner,
@@ -163,7 +164,9 @@ export default function AiChat() {
                       content={
                         <div className="ai-chat__answer">
                           <ToolIndicator tools={m.tools} />
-                          {m.content && <div className="ai-chat__text">{m.content}</div>}
+                          {m.content && (
+                            <MessageMarkdown content={m.content} streaming={m.status === 'streaming'} />
+                          )}
                           {m.proposal && <ProposalCard proposal={m.proposal} />}
                           {m.error && <Alert type="error" showIcon title={t('error.title')} description={m.error} />}
                           {m.status === 'aborted' && <p className="ai-chat__stopped">{t('stopped')}</p>}

@@ -316,7 +316,6 @@ export default function AdminClassesPage() {
       title: t('field.actions'),
       key: 'actions',
       width: 120,
-      fixed: 'right',
       render: (_, c) => (
         <div className="admin-classes-page__actions">
           {canManage && (
@@ -439,7 +438,6 @@ export default function AdminClassesPage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1000 }}
         locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
       />
 

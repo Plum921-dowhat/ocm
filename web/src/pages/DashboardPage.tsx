@@ -170,6 +170,7 @@ export default function DashboardPage() {
   return (
     <div className="dashboard">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -190,7 +191,7 @@ export default function DashboardPage() {
         <Alert
           type="error"
           showIcon
-          message={t('error.title')}
+          title={t('error.title')}
           description={error}
           className="dashboard__error"
           action={

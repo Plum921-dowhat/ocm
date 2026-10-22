@@ -32,7 +32,9 @@ export default function ListPagination({
 
   return (
     <Pagination
-      className={className}
+      // Fixed hook so the shared spacing rule in app.scss applies everywhere;
+      // callers may still add their own class on top.
+      className={['list-pagination', className].filter(Boolean).join(' ')}
       current={shown}
       pageSize={pageSize}
       total={totalItems}

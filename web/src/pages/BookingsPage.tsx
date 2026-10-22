@@ -297,6 +297,7 @@ export default function BookingsPage() {
   return (
     <div className="bookings-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -389,7 +390,7 @@ export default function BookingsPage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1220 }}
+        scroll={{ x: 990 }}
         locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
       />
 

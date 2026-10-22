@@ -232,6 +232,7 @@ export default function RolesPage() {
   return (
     <div className="roles-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (

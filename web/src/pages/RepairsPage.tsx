@@ -148,21 +148,21 @@ export default function RepairsPage() {
     {
       title: t('field.classroom'),
       key: 'classroom',
-      width: 200,
+      width: 160,
       render: (_, r) => classroomLabel(r),
     },
-    { title: t('field.description'), dataIndex: 'description', width: 280 },
-    { title: t('field.creatorName'), dataIndex: 'creatorName', width: 140 },
+    { title: t('field.description'), dataIndex: 'description', width: 220 },
+    { title: t('field.creatorName'), dataIndex: 'creatorName', width: 120 },
     {
       title: t('field.assigneeName'),
       dataIndex: 'assigneeName',
-      width: 140,
+      width: 120,
       render: (value: string) => value || '-',
     },
     {
       title: t('field.status'),
       dataIndex: 'status',
-      width: 120,
+      width: 100,
       render: (value: string) => (
         <Tag color={STATUS_COLOR[value] ?? 'default'}>
           {t('status.' + value, { defaultValue: value })}
@@ -172,7 +172,7 @@ export default function RepairsPage() {
     {
       title: t('field.createdAt'),
       dataIndex: 'createdAt',
-      width: 170,
+      width: 140,
       render: (value: string) => formatDate(value),
     },
     {
@@ -230,6 +230,7 @@ export default function RepairsPage() {
   return (
     <div className="classrooms-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -295,7 +296,7 @@ export default function RepairsPage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1045 }}
         locale={{ emptyText: list.q ? t('empty.search') : t('empty.none') }}
       />
 

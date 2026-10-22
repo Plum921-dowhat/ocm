@@ -147,35 +147,35 @@ export default function AttendancePage() {
     `${c.counts.expected} / ${c.counts.present} / ${c.counts.late} / ${c.counts.absent} / ${c.counts.leave}`
 
   const columns: TableColumnsType<Checkin> = [
-    { title: t('list.field.title'), dataIndex: 'title', width: 180 },
+    { title: t('list.field.title'), dataIndex: 'title', width: 160 },
     {
       title: t('list.field.offering'),
       key: 'offering',
-      width: 220,
+      width: 180,
       render: (_, c) => (c.courseName ? `${c.courseName} / ${c.teachingClassName}` : t('list.noOffering')),
     },
     {
       title: t('list.field.sessionText'),
       dataIndex: 'sessionText',
-      width: 200,
+      width: 170,
       render: (value: string) => value || '-',
     },
     {
       title: t('list.field.status'),
       dataIndex: 'status',
-      width: 110,
+      width: 100,
       render: (value: string) => <CheckinStatusTag status={value} />,
     },
     {
       title: t('list.field.counts'),
       key: 'counts',
-      width: 180,
+      width: 150,
       render: (_, c) => countsText(c),
     },
     {
       title: t('list.field.startsAt'),
       dataIndex: 'startsAt',
-      width: 170,
+      width: 150,
       render: (value: string) => formatDateTime(value),
     },
     {
@@ -201,6 +201,7 @@ export default function AttendancePage() {
   return (
     <div className="courses-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -292,7 +293,7 @@ export default function AttendancePage() {
         dataSource={list.items}
         loading={loading}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1075 }}
         locale={{
           emptyText: list.q || statusFilter || from || to ? t('list.empty.search') : t('list.empty.none'),
         }}

@@ -81,6 +81,7 @@
   "sessionModal": {
     "create": "Add session",
     "edit": "Edit session ({{date}})",
+    "remove": "Delete this session",
     "deleteConfirm": "Are you sure you want to delete the session on {{date}} {{period}} ({{classroom}})? This action cannot be undone."
   },
   "sessionsExpanded": {

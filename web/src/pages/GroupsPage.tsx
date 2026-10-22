@@ -245,6 +245,7 @@ export default function GroupsPage() {
   return (
     <div className="groups-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (

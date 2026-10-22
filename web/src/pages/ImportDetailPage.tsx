@@ -106,6 +106,7 @@ export default function ImportDetailPage() {
   return (
     <div className="imports-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (

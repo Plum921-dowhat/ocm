@@ -1767,9 +1767,11 @@ body {
 
 /* ---- session-form timetable picker ---- */
 .timetable-picker__hint {
-  @include type-style('body-01');
+  // Compact: every pixel spent on the hint is a row of the grid the user
+  // cannot see. The full explanation still fits in one or two lines.
+  @include type-style('label-01');
   color: var(--cds-text-secondary);
-  margin-block-end: $spacing-05;
+  margin-block-end: $spacing-03;
 }
 
 // The modal itself scrolls (hasScrollingContent), so the grid renders exactly
@@ -1802,6 +1804,12 @@ body {
   // The form stacks full-width inputs; keep the secondary action visually
   // grouped with the classroom/date/period fields it backfills.
   align-self: flex-start;
+}
+
+.session-form__delete {
+  // Sits under the stacked fields, same rhythm as the timetable page's old
+  // inline delete button.
+  margin-block-start: $spacing-05;
 }
 
 /* ---- logs page ---- */
@@ -2149,10 +2157,132 @@ body {
   gap: $spacing-03;
 }
 
-.ai-chat__text {
+// Assistant answers are Markdown (see MessageMarkdown). XMarkdown is rendered
+// with disableDefaultStyles, so every block-level style is declared here; the
+// extra `.ai-chat` ancestor also wins over the package's base rules, which are
+// injected after app.scss.
+.ai-chat .ai-chat__text {
+  font-size: 0.875rem;
   line-height: 1.7;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+
+  > :first-child {
+    margin-block-start: 0;
+  }
+
+  > :last-child {
+    margin-block-end: 0;
+  }
+
+  p {
+    margin: 0 0 $spacing-03;
+  }
+
+  // Headings inside a 384px panel keep body-level sizes; anything bigger
+  // pushes two or three words per line.
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin: $spacing-04 0 $spacing-02;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  h1,
+  h2 {
+    font-size: 1rem;
+  }
+
+  ul,
+  ol {
+    margin: $spacing-02 0 $spacing-03;
+    padding-inline-start: 18px;
+  }
+
+  li {
+    margin-block: 2px;
+
+    > ul,
+    > ol {
+      margin-block: 2px;
+      padding-inline-start: 16px;
+    }
+  }
+
+  code {
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+    background: var(--cds-layer-accent-01);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.8125rem;
+  }
+
+  pre {
+    margin: $spacing-03 0;
+    padding: $spacing-03 $spacing-04;
+    overflow-x: auto;
+    border-radius: 4px;
+    background: var(--cds-layer-accent-01);
+    line-height: 1.6;
+
+    code {
+      padding: 0;
+      background: none;
+      font-size: 0.8125rem;
+    }
+  }
+
+  table {
+    display: block;
+    inline-size: max-content;
+    max-inline-size: 100%;
+    margin: $spacing-03 0;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+
+    th,
+    td {
+      padding: 4px 8px;
+      border: 1px solid var(--cds-border-subtle);
+      text-align: start;
+    }
+
+    th {
+      background: var(--cds-layer-accent-01);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+  }
+
+  blockquote {
+    margin: $spacing-03 0;
+    padding-inline-start: $spacing-04;
+    border-inline-start: 3px solid var(--cds-border-subtle);
+    color: var(--cds-text-secondary);
+  }
+
+  a {
+    color: var(--cds-link-primary);
+    text-decoration: underline;
+  }
+
+  hr {
+    margin: $spacing-04 0;
+    border: 0;
+    border-block-start: 1px solid var(--cds-border-subtle);
+  }
+
+  img {
+    max-inline-size: 100%;
+    block-size: auto;
+    border-radius: 4px;
+  }
 }
 
 .ai-chat__tools {
@@ -2523,6 +2653,13 @@ body {
   inline-size: 280px;
 }
 
+// The pager sits under every list table. Ant Design's Pagination has no outer
+// spacing of its own (Carbon's supplied it), so without this gap it reads as
+// part of the table instead of a control below it.
+.list-pagination {
+  margin-block-start: $spacing-05;
+}
+
 // Login: errors now sit under the Ant Design input instead of inside it.
 .login__field-error {
   margin-block-start: 4px;
@@ -2702,8 +2839,35 @@ body {
 // Timetable picker: a long period list must scroll inside the viewport
 // instead of pushing the modal's footer off screen.
 .timetable-picker .ant-modal-body {
-  max-block-size: calc(100vh - 260px);
-  overflow-y: auto;
+  // The dialog sits 16px from the top; leave room for the title and footer and
+  // let the body take the rest of the viewport so all ten periods fit on a
+  // normal laptop screen. Only the grid scrolls: the hint and the
+  // classroom/week controls stay put, and the day header sticks to the top
+  // while the rows move under it.
+  display: flex;
+  flex-direction: column;
+  max-block-size: calc(100vh - 180px);
+  overflow: hidden;
+}
+
+.timetable-picker__grid {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+}
+
+// The grid brings its own horizontal scroller for the standalone page; inside
+// the picker the wrapper above owns both axes instead of nesting two.
+.timetable-picker .timetable__scroll {
+  overflow: visible;
+}
+
+.timetable-picker .timetable__grid thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  // Sticky headers lose their collapsed-table border, so draw it with a shadow.
+  box-shadow: inset 0 -1px 0 var(--cds-border-subtle);
 }
 
 .timetable-picker .ant-alert {

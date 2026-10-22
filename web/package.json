@@ -11,12 +11,14 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "node scripts/check-table-widths.mjs && node scripts/check-ai-markdown.mjs",
     "gen:types": "swagger2openapi ../backend/docs/swagger.json -o .openapi.json && openapi-typescript .openapi.json -o src/types/api.d.ts"
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.7",
     "@ant-design/icons": "^6.3.4",
     "@ant-design/x": "^2.9.0",
+    "@ant-design/x-markdown": "^2.9.0",
     "antd": "^6.6.6",
     "dayjs": "^1.11.23",
     "i18next": "^26.3.6",

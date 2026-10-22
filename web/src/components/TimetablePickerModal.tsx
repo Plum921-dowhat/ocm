@@ -199,7 +199,10 @@ export default function TimetablePickerModal({
       onCancel={onClose}
       onOk={apply}
       okButtonProps={{ disabled: !selection || loading }}
-      width={720}
+      // The grid needs 62rem just to avoid horizontal scrolling, so the dialog
+      // takes as much of the viewport as it can instead of a fixed 720px.
+      width="min(1440px, calc(100vw - 24px))"
+      style={{ top: 16 }}
       className="timetable-picker"
       destroyOnHidden
     >

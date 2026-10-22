@@ -81,6 +81,7 @@
   "sessionModal": {
     "create": "添加课次",
     "edit": "编辑课次（{{date}}）",
+    "remove": "删除此课次",
     "deleteConfirm": "确定要删除 {{date}} {{period}}（{{classroom}}）的课次吗？此操作不可撤销。"
   },
   "sessionsExpanded": {

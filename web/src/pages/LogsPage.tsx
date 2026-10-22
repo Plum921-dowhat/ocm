@@ -154,6 +154,7 @@ export default function LogsPage() {
   return (
     <div className="logs-page">
       <Breadcrumb
+        aria-label={t('aria.breadcrumb', { ns: 'common' })}
         items={[
           {
             title: (
@@ -174,8 +175,8 @@ export default function LogsPage() {
       <h1 className="logs-page__heading">{t('title')}</h1>
       <p className="logs-page__subtitle">{t('subtitle')}</p>
 
-      {error && <Alert type="error" showIcon message={t('error.load')} description={error} />}
-      {saveNotice && <Alert type="success" showIcon message={saveNotice} />}
+      {error && <Alert type="error" showIcon title={t('error.load')} description={error} />}
+      {saveNotice && <Alert type="success" showIcon title={saveNotice} />}
 
       <div className="logs-page__filters">
         <Field label={t('filter.from')} htmlFor="logs-from">
@@ -246,6 +247,7 @@ export default function LogsPage() {
           <span className="logs-page__settings-label">{t('settings.retentionEnabledLabel')}</span>
           <Switch
             id="retentionEnabled"
+            aria-label={t('settings.retentionEnabledLabel')}
             checked={settings.retentionEnabled}
             disabled={!canManage || !settingsLoaded}
             onChange={(checked) => setSettings({ ...settings, retentionEnabled: checked })}

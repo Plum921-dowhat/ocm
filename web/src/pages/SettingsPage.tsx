@@ -430,6 +430,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
       <SettingsRow label={t('storage.useSsl')} htmlFor="storage-use-ssl" hint={t('storage.useSslHint')}>
         <Switch
           id="storage-use-ssl"
+          aria-label={t('storage.useSsl')}
           checked={form.useSsl}
           disabled={disabled || !s.loaded}
           onChange={(checked) => setForm({ ...form, useSsl: checked })}
@@ -438,6 +439,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
       <SettingsRow label={t('storage.usePathStyle')} htmlFor="storage-use-path-style" hint={t('storage.usePathStyleHint')}>
         <Switch
           id="storage-use-path-style"
+          aria-label={t('storage.usePathStyle')}
           checked={form.usePathStyle}
           disabled={disabled || !s.loaded}
           onChange={(checked) => setForm({ ...form, usePathStyle: checked })}
