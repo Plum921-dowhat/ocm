@@ -1,16 +1,28 @@
 import { useState } from 'react'
-import { Alert, Button, Spin, Tag } from 'antd'
-import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
+import { Alert, Button, theme } from 'antd'
+import { CaretRightOutlined, CheckCircleFilled, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { apiFetch } from '../auth/api'
 
-// The backend's SSE 'tool' events (internal/ai agent.go).
-export interface AiTool {
-  name: string
-  status: 'running' | 'ok' | 'error'
-}
+// One entry of the assistant turn, in arrival order: a chunk of the model's
+// reasoning trace or a tool it called. The backend streams both as they happen,
+// so keeping them in a single list preserves the real sequence
+// (think -> call -> think -> call -> answer) instead of regrouping by type.
+export type AiStep =
+  | { kind: 'thinking'; text: string }
+  | {
+      kind: 'tool'
+      id?: string
+      name: string
+      status: 'running' | 'ok' | 'error'
+      args?: Record<string, unknown>
+      total?: number
+      shown?: number
+    }
+
+type ToolStep = Extract<AiStep, { kind: 'tool' }>
 
 // One booking/session clash attached to a proposal (ProposalPayload.conflicts).
 export interface AiConflict {
@@ -38,36 +50,105 @@ export interface AiProposal {
   error: string
 }
 
-// ToolIndicator renders the tools the assistant called while answering. It is
-// an inline strip above the answer text, so it stays compact: one tag per tool,
-// with a spinner only while that tool is running.
-export function ToolIndicator({ tools }: { tools?: AiTool[] }) {
+const STEP_ICON = {
+  running: <LoadingOutlined spin />,
+  ok: <CheckCircleFilled />,
+  error: <CloseCircleFilled />,
+}
+
+// ThinkingChain renders the turn's real sequence: reasoning text and tool calls
+// interleaved in arrival order. It stays expanded while the turn is working (so
+// the wait has visible progress) and folds into one line with the elapsed time
+// once the answer starts; clicking the header re-opens it.
+//
+// Only real data is rendered. Models that return no reasoning trace and call no
+// tools get no block at all — no invented "thinking" steps.
+export function ThinkingChain({
+  steps,
+  thinkingMs,
+  streaming,
+}: {
+  steps?: AiStep[]
+  thinkingMs?: number
+  streaming?: boolean
+}) {
   const { t } = useTranslation('aiChat')
-  if (!tools || tools.length === 0) return null
+  const [manual, setManual] = useState<boolean | null>(null)
+  // Ant Design tokens follow the light/dark scheme; the app's CSS bridge only
+  // exposes text colours, so semantic status colours come from the theme.
+  const { token } = theme.useToken()
+  const list = steps ?? []
+  if (list.length === 0) return null
+
+  const running = Boolean(streaming) && thinkingMs === undefined
+  const expanded = manual ?? running
+  const seconds = Math.max(1, Math.round((thinkingMs ?? 0) / 1000))
+  const toolCount = list.filter((step) => step.kind === 'tool').length
+  const statusColor = (status: 'running' | 'ok' | 'error') =>
+    status === 'error' ? token.colorError : status === 'running' ? token.colorTextTertiary : token.colorSuccess
+
+  // Only the arguments and row counts: the tool name is already the label.
+  const describe = (step: ToolStep): string => {
+    const args = step.args ?? {}
+    const parts: string[] = []
+    if (typeof args.date === 'string' && args.date) parts.push(args.date)
+    if (typeof args.periodStart === 'number' && typeof args.periodEnd === 'number') {
+      parts.push(t('thinking.periods', { start: args.periodStart, end: args.periodEnd }))
+    }
+    for (const value of [args.building, args.q]) {
+      if (typeof value === 'string' && value) parts.push(value)
+    }
+    if (typeof step.total === 'number') {
+      parts.push(
+        typeof step.shown === 'number' && step.shown < step.total
+          ? t('thinking.foundPartial', { total: step.total, shown: step.shown })
+          : t('thinking.found', { total: step.total }),
+      )
+    }
+    return parts.join(' · ')
+  }
+
   return (
-    <div className="ai-chat__tools">
-      {tools.map((tool, i) => {
-        const label = t('tools.' + tool.name, { defaultValue: tool.name })
-        if (tool.status === 'running') {
-          return (
-            <Tag key={`${tool.name}-${i}`} color="processing" icon={<Spin size="small" />}>
-              {t('tool.running', { label })}
-            </Tag>
-          )
-        }
-        if (tool.status === 'error') {
-          return (
-            <Tag key={`${tool.name}-${i}`} color="error" icon={<CloseCircleFilled />}>
-              {t('tool.error', { label })}
-            </Tag>
-          )
-        }
-        return (
-          <Tag key={`${tool.name}-${i}`} color="success" icon={<CheckCircleFilled />}>
-            {t('tool.ok', { label })}
-          </Tag>
-        )
-      })}
+    <div className="ai-chat__think">
+      <button
+        type="button"
+        className="ai-chat__think-head"
+        aria-expanded={expanded}
+        aria-label={expanded ? t('thinking.collapse') : t('thinking.expand')}
+        onClick={() => setManual(!expanded)}
+      >
+        <CaretRightOutlined className="ai-chat__think-caret" rotate={expanded ? 90 : 0} />
+        <span className={running ? 'ai-chat__think-label ai-chat__think-label--running' : 'ai-chat__think-label'}>
+          {running ? t('thinking.running') : t('thinking.done', { seconds })}
+        </span>
+        {!running && toolCount > 0 && (
+          <span className="ai-chat__think-count">{t('thinking.stepCount', { count: toolCount })}</span>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="ai-chat__think-body">
+          {list.map((step, i) => {
+            if (step.kind === 'thinking') {
+              return (
+                <p key={`think-${i}`} className="ai-chat__think-text">
+                  {step.text}
+                </p>
+              )
+            }
+            const detail = describe(step)
+            return (
+              <div key={step.id || `tool-${i}`} className="ai-chat__step">
+                <span className="ai-chat__step-icon" style={{ color: statusColor(step.status) }}>
+                  {STEP_ICON[step.status]}
+                </span>
+                <span className="ai-chat__step-label">{t('tools.' + step.name, { defaultValue: step.name })}</span>
+                {detail && <span className="ai-chat__step-desc">· {detail}</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

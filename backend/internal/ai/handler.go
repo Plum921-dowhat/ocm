@@ -91,7 +91,7 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewClient(settings.BaseURL, settings.APIKey, settings.Model)
+	client := NewClient(settings.BaseURL, settings.APIKey, settings.Model, settings.ReasoningEffort)
 	agent := NewAgent(client, h.classrooms, h.regimes, h.courses, h.bookings, subject)
 
 	// Preflight the first upstream round before committing to the stream, so

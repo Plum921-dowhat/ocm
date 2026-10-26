@@ -11,12 +11,18 @@ definitions:
         type: boolean
       model:
         type: string
+      reasoningEffort:
+        description: |-
+          ReasoningEffort is "" (provider default), none, low, medium, high, xhigh
+          or max. "none" switches the reasoning trace off.
+        type: string
     required:
     - apiKey
     - apiKeySet
     - baseUrl
     - enabled
     - model
+    - reasoningEffort
     type: object
   ai.Settings:
     properties:
@@ -28,11 +34,17 @@ definitions:
         type: boolean
       model:
         type: string
+      reasoningEffort:
+        description: |-
+          ReasoningEffort is the thinking-depth dial sent as reasoning_effort.
+          Empty leaves the provider default untouched.
+        type: string
     required:
     - apiKey
     - baseUrl
     - enabled
     - model
+    - reasoningEffort
     type: object
   attendance.CheckinInput:
     properties:

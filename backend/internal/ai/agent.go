@@ -28,9 +28,14 @@ import (
 // (upstream SSE keep-alives reset it), and the total deadline bounds the
 // whole multi-round tool loop.
 const (
-	maxRounds    = 5
+	// maxRounds caps how many tool batches execute in one turn. A reasoning
+	// model with a 128K context spends one round per refinement, so the cap is
+	// set where a compound question (availability -> timetable -> conflict
+	// check -> proposal) still fits. Running out does not fail the turn: see
+	// finalAnswer, which asks once more without tools.
+	maxRounds    = 7
 	roundTimeout = 120 * time.Second
-	totalTimeout = 10 * time.Minute
+	totalTimeout = 12 * time.Minute
 	idleTimeout  = 60 * time.Second
 
 	// maxToolResultBytes caps one tool result handed to the model. Results are
@@ -60,6 +65,12 @@ const (
 	availableNote     = "共 %d 间空闲教室，此处给出 %d 间（含容量最小的与最大的各一部分）。缩小范围请传 building、type 或 capacityMin。"
 	timetableNote     = "共 %d 节课，此处给出 %d 节（最早与最晚的各一部分）。请缩短日期范围，或用 date/weekOf 精确查询。"
 )
+
+// finalRoundNote is appended when the tool budget runs out. Asking once more
+// without tools turns a hard failure into a partial answer — the model already
+// holds every tool result it gathered, and the user keeps the text that has
+// already streamed.
+const finalRoundNote = "本轮可用的工具调用次数已用完。请只依据上面的查询结果作答，不要再次请求工具；如果信息不足以完整回答，请明确说明还缺什么。"
 
 // Tool is one assistant tool: its OpenAI function definition plus the
 // server-side executor. Run returns a business result string (shown to the
@@ -244,7 +255,7 @@ func (a *Agent) runRounds(ctx context.Context, msgs []ChatMessage, roundCtx cont
 	stream := first
 	toolRounds := 0
 	for {
-		_, calls, err := a.consumeStream(roundCtx, stream, emit)
+		_, reasoning, calls, err := a.consumeStream(roundCtx, stream, emit)
 		stream.Close()
 		roundCancel()
 		if err != nil {
@@ -255,12 +266,11 @@ func (a *Agent) runRounds(ctx context.Context, msgs []ChatMessage, roundCtx cont
 			return nil
 		}
 		toolRounds++
-		if toolRounds >= maxRounds {
-			return errors.New("AI 助手处理步骤过多，请简化问题后重试")
-		}
 
 		// Execute the tool calls, then hand the results back for the next round.
-		msgs = append(msgs, ChatMessage{Role: "assistant", ToolCalls: calls})
+		// The assistant turn echoes the reasoning trace: DeepSeek continues its
+		// own train of thought across tool results and expects it there.
+		msgs = append(msgs, ChatMessage{Role: "assistant", ReasoningContent: reasoning, ToolCalls: calls})
 		for _, call := range calls {
 			result, proposal, err := a.executeTool(ctx, call, emit)
 			if err != nil {
@@ -280,6 +290,13 @@ func (a *Agent) runRounds(ctx context.Context, msgs []ChatMessage, roundCtx cont
 			})
 		}
 
+		// Budget exhausted: the tools this round still ran (their results are
+		// already in msgs), but the next request goes out without any so the
+		// model has to answer instead of asking for more.
+		if toolRounds >= maxRounds {
+			return a.finalAnswer(ctx, msgs, emit)
+		}
+
 		roundCtx, roundCancel = context.WithTimeout(ctx, roundTimeout)
 		stream, err = a.client.StreamRequest(roundCtx, msgs, a.Definitions())
 		if err != nil {
@@ -287,6 +304,33 @@ func (a *Agent) runRounds(ctx context.Context, msgs []ChatMessage, roundCtx cont
 			return err
 		}
 	}
+}
+
+// finalAnswer is the graceful-degradation path for a turn that used its whole
+// tool budget: one more request with no tools attached. Previously the loop
+// returned an error here, which surfaced as "处理步骤过多" and marked the
+// already-streamed text as failed; a partial answer is more useful than that.
+func (a *Agent) finalAnswer(ctx context.Context, msgs []ChatMessage, emit func(string, any)) error {
+	roundCtx, cancel := context.WithTimeout(ctx, roundTimeout)
+	defer cancel()
+	finalMsgs := append(append([]ChatMessage{}, msgs...), ChatMessage{Role: "user", Content: finalRoundNote})
+	stream, err := a.client.StreamRequest(roundCtx, finalMsgs, nil)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	text, _, calls, err := a.consumeStream(roundCtx, stream, emit)
+	if err != nil {
+		return err
+	}
+	// The note is advisory; a model can still answer with tool calls it cannot
+	// execute. Only report failure when that produced no text at all.
+	if text == "" && len(calls) > 0 {
+		return errors.New("AI 助手处理步骤过多，请简化问题后重试")
+	}
+	emit("done", map[string]any{})
+	return nil
 }
 
 // buildMessages assembles the system prompt and the client history. It loads
@@ -317,10 +361,12 @@ func (a *Agent) regimesFor(ctx context.Context) ([]schedule.Regime, error) {
 	return a.regimes.ListRegimes(ctx)
 }
 
-// consumeStream relays text deltas to the client and accumulates tool-call
-// fragments by index until the upstream stream ends. It returns the assembled
-// text (already emitted) and the tool calls sorted by index.
-func (a *Agent) consumeStream(ctx context.Context, stream *Stream, emit func(string, any)) (string, []ChatToolCall, error) {
+// consumeStream relays thinking and text deltas to the client and accumulates
+// tool-call fragments by index until the upstream stream ends. It returns the
+// assembled text (already emitted), the reasoning trace (emitted as `thinking`
+// events and echoed back on the tool-call turn), and the tool calls sorted by
+// index.
+func (a *Agent) consumeStream(ctx context.Context, stream *Stream, emit func(string, any)) (string, string, []ChatToolCall, error) {
 	type result struct {
 		ch    streamChunk
 		event bool
@@ -340,6 +386,7 @@ func (a *Agent) consumeStream(ctx context.Context, stream *Stream, emit func(str
 	}()
 
 	var text strings.Builder
+	var reasoning strings.Builder
 	calls := map[int]*ChatToolCall{}
 	idle := time.NewTimer(idleTimeout)
 	defer idle.Stop()
@@ -347,23 +394,24 @@ func (a *Agent) consumeStream(ctx context.Context, stream *Stream, emit func(str
 	for {
 		select {
 		case <-idle.C:
-			return "", nil, errors.New("AI 助手响应超时，请稍后再试")
+			return "", "", nil, errors.New("AI 助手响应超时，请稍后再试")
 		case <-ctx.Done():
-			return "", nil, ctx.Err()
+			return "", "", nil, ctx.Err()
 		case res, ok := <-pump:
 			if !ok {
-				return "", nil, errors.New("AI 助手响应异常结束")
+				return "", "", nil, errors.New("AI 助手响应异常结束")
 			}
 			idle.Reset(idleTimeout)
 			if res.err != nil {
 				if errors.Is(res.err, io.EOF) {
-					return a.finishRound(text.String(), calls)
+					txt, list, err := a.finishRound(text.String(), calls)
+					return txt, reasoning.String(), list, err
 				}
 				if ctx.Err() != nil {
-					return "", nil, ctx.Err()
+					return "", "", nil, ctx.Err()
 				}
 				logging.L.Error("ai upstream stream", "err", res.err)
-				return "", nil, ErrUpstreamUnavailable
+				return "", "", nil, ErrUpstreamUnavailable
 			}
 			if !res.event {
 				continue // keep-alive traffic
@@ -371,9 +419,16 @@ func (a *Agent) consumeStream(ctx context.Context, stream *Stream, emit func(str
 			ch := res.ch
 			if ch.Error != nil {
 				logging.L.Error("ai upstream error chunk", "message", ch.Error.Message)
-				return "", nil, ErrUpstreamUnavailable
+				return "", "", nil, ErrUpstreamUnavailable
 			}
 			for _, choice := range ch.Choices {
+				// reasoning_content streams before and between answer deltas;
+				// forward it as its own event so the UI can render the trace
+				// without mixing it into the answer text.
+				if choice.Delta.ReasoningContent != "" {
+					reasoning.WriteString(choice.Delta.ReasoningContent)
+					emit("thinking", map[string]any{"content": choice.Delta.ReasoningContent})
+				}
 				if choice.Delta.Content != "" {
 					text.WriteString(choice.Delta.Content)
 					emit("delta", map[string]any{"content": choice.Delta.Content})
@@ -424,7 +479,7 @@ func (a *Agent) executeTool(ctx context.Context, call ChatToolCall, emit func(st
 	if permission := a.permissionFor(call.Function.Name); permission != "" && !a.subject.Has(permission) {
 		msg := fmt.Sprintf("当前用户没有执行 %s 所需的权限（%s），请告知用户向管理员申请该权限。",
 			call.Function.Name, permission)
-		emit("tool", map[string]any{"name": call.Function.Name, "status": "error", "result": msg})
+		emit("tool", map[string]any{"id": call.ID, "name": call.Function.Name, "status": "error", "result": msg})
 		return msg, nil, nil
 	}
 
@@ -432,8 +487,10 @@ func (a *Agent) executeTool(ctx context.Context, call ChatToolCall, emit func(st
 	if call.Function.Arguments != "" {
 		rawArgs = json.RawMessage(call.Function.Arguments)
 	}
-	// Announce the call so the UI can show a "querying..." indicator.
-	emit("tool", map[string]any{"name": call.Function.Name, "status": "running", "args": parseArgs(rawArgs)})
+	// Announce the call so the UI can show a "querying..." indicator. The id is
+	// what lets a client pair the running event with its result when the model
+	// issues parallel calls to the same tool.
+	emit("tool", map[string]any{"id": call.ID, "name": call.Function.Name, "status": "running", "args": parseArgs(rawArgs)})
 
 	result, ok, proposal, err := a.runTool(ctx, call.Function.Name, rawArgs)
 	if err != nil {
@@ -444,14 +501,36 @@ func (a *Agent) executeTool(ctx context.Context, call ChatToolCall, emit func(st
 		status = "error"
 	}
 	// Clients render only the name/status tag, so the (up to 12 KB) success
-	// payload is not worth pushing down the SSE stream; keep a short preview
-	// for failures, which is where diagnosis actually needs it.
-	payload := map[string]any{"name": call.Function.Name, "status": status}
+	// payload is not worth pushing down the SSE stream. Counts are the
+	// exception: the thinking chain shows "共 137 间" from total/shown, and
+	// failures keep a short preview, which is where diagnosis needs it.
+	payload := map[string]any{"id": call.ID, "name": call.Function.Name, "status": status}
 	if !ok {
 		payload["result"] = truncate(result, maxToolErrorPreview)
+	} else if total, shown, hasCounts := resultCounts(result); hasCounts {
+		payload["total"], payload["shown"] = total, shown
 	}
 	emit("tool", payload)
 	return truncate(result, maxToolResultBytes), proposal, nil
+}
+
+// resultCounts lifts total/shown out of a list tool's JSON result without
+// unmarshalling the whole payload (the rows themselves are never needed here).
+func resultCounts(result string) (total, shown int, ok bool) {
+	if !strings.HasPrefix(result, "{") {
+		return 0, 0, false
+	}
+	var meta struct {
+		Total *int `json:"total"`
+		Shown *int `json:"shown"`
+	}
+	if err := json.Unmarshal([]byte(result), &meta); err != nil {
+		return 0, 0, false
+	}
+	if meta.Total == nil || meta.Shown == nil {
+		return 0, 0, false
+	}
+	return *meta.Total, *meta.Shown, true
 }
 
 // permissionFor maps a tool name to the permission its data requires.

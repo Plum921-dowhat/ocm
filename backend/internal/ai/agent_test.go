@@ -73,3 +73,15 @@ func TestRegimeBlockWithoutPeriods(t *testing.T) {
 		t.Errorf("period-less regime should render its own marker:\n%s", block)
 	}
 }
+
+// TestSystemPromptNarrowPanelRules pins the two presentation rules that came
+// from a real screenshot: the trace was in English and a 7-column table was
+// wider than the 384px panel.
+func TestSystemPromptNarrowPanelRules(t *testing.T) {
+	prompt := systemPrompt(time.Date(2026, 10, 24, 12, 0, 0, 0, time.Local), promptTestRegimes())
+	for _, want := range []string{"思考过程与回答都使用中文", "确需表格时最多 4 列"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("system prompt missing %q", want)
+		}
+	}
+}

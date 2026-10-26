@@ -2155,6 +2155,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: $spacing-03;
+  // Without this, a flex child with long text refuses to shrink and the text
+  // is clipped at the bubble edge instead of wrapping.
+  min-inline-size: 0;
 }
 
 // Assistant answers are Markdown (see MessageMarkdown). XMarkdown is rendered
@@ -2285,14 +2288,131 @@ body {
   }
 }
 
-.ai-chat__tools {
+.ai-chat__think {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: $spacing-02;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
 
-  .ant-tag {
-    margin-inline-end: 0;
+.ai-chat__think-head {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-02;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  cursor: pointer;
+  color: var(--cds-text-secondary);
+  @include type-style('helper-text-01');
+
+  &:hover {
+    color: var(--cds-text-primary);
   }
+
+  // Keyboard focus only: a mouse click must not leave a ring behind.
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: 2px;
+  }
+}
+
+.ai-chat__think-caret {
+  font-size: 10px;
+  transition: transform 150ms ease;
+}
+
+// "· 2 个步骤" — tells the user there is something behind the collapsed line,
+// otherwise the header reads as a dead label with no affordance.
+.ai-chat__think-count {
+  color: var(--cds-text-secondary);
+  opacity: 0.75;
+  font-size: 0.75rem;
+}
+
+// A slow pulse so a long tool round does not look frozen; the elapsed time
+// only appears once the turn settles, so motion carries the "still working" cue.
+.ai-chat__think-label--running {
+  animation: ai-chat-think-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ai-chat-think-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat__think-label--running {
+    animation: none;
+  }
+}
+
+// The vertical rule is what reads as "this is a side channel, not the answer".
+// One scroll container for the whole timeline: per-paragraph scrolling made a
+// short reasoning chunk look like an empty box with a stray scrollbar.
+.ai-chat__think-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-inline-size: 0;
+  max-block-size: 260px;
+  overflow-y: auto;
+  margin-inline-start: 3px;
+  padding-inline-start: $spacing-03;
+  border-inline-start: 2px solid var(--cds-border-subtle);
+}
+
+.ai-chat__think-text {
+  margin: 0;
+  white-space: pre-wrap;
+  // A trace can contain long unbroken tokens (URLs, ids); without this the
+  // paragraph overflows horizontally instead of wrapping.
+  overflow-wrap: anywhere;
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+// One tool call in the timeline. Compact on purpose: the panel is 384px wide
+// and the previous renderer used heading-sized text for the tool name.
+.ai-chat__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-inline-size: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.ai-chat__step-icon {
+  flex: none;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ai-chat__step-label {
+  flex: none;
+  font-weight: 500;
+  color: var(--cds-text-primary);
+  white-space: nowrap;
+}
+
+.ai-chat__step-desc {
+  min-inline-size: 0;
+  color: var(--cds-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .ai-chat__stopped {

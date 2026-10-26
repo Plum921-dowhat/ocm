@@ -35,15 +35,20 @@ type Client struct {
 	baseURL string // no trailing slash
 	apiKey  string
 	model   string
-	http    *http.Client // no Timeout: deadlines come from the caller's context
+	// reasoningEffort is sent as reasoning_effort when non-empty. Empty means
+	// the field is omitted so providers without reasoning support (and models
+	// that only accept their own defaults) stay unaffected.
+	reasoningEffort string
+	http            *http.Client // no Timeout: deadlines come from the caller's context
 }
 
-func NewClient(baseURL, apiKey, model string) *Client {
+func NewClient(baseURL, apiKey, model, reasoningEffort string) *Client {
 	return &Client{
-		baseURL: strings.TrimSuffix(baseURL, "/"),
-		apiKey:  apiKey,
-		model:   model,
-		http:    &http.Client{},
+		baseURL:         strings.TrimSuffix(baseURL, "/"),
+		apiKey:          apiKey,
+		model:           model,
+		reasoningEffort: reasoningEffort,
+		http:            &http.Client{},
 	}
 }
 
@@ -70,11 +75,17 @@ func NewToolDef(name, description string, params map[string]any) ToolDef {
 
 // ChatMessage is one message in the upstream request. ToolCallID/ToolCalls
 // are set for tool results and assistant tool-call turns respectively.
+//
+// ReasoningContent carries a reasoning model's thinking trace. DeepSeek's
+// tool-calling protocol expects it back on the assistant turn that carries
+// tool_calls (the model continues its own train of thought), so the agent
+// echoes what the stream returned rather than dropping it.
 type ChatMessage struct {
-	Role       string         `json:"role"`
-	Content    string         `json:"content,omitempty"`
-	ToolCallID string         `json:"tool_call_id,omitempty"`
-	ToolCalls  []ChatToolCall `json:"tool_calls,omitempty"`
+	Role             string         `json:"role"`
+	Content          string         `json:"content,omitempty"`
+	ReasoningContent string         `json:"reasoning_content,omitempty"`
+	ToolCallID       string         `json:"tool_call_id,omitempty"`
+	ToolCalls        []ChatToolCall `json:"tool_calls,omitempty"`
 }
 
 // ChatToolCall mirrors the OpenAI tool_call wire shape (id + function name +
@@ -90,17 +101,25 @@ type ChatToolCall struct {
 	} `json:"function"`
 }
 
+// streamDelta is one choice's incremental payload. Named (rather than inlined)
+// because the non-SSE fallback path builds the same shape, and reasoning
+// models add fields to it (reasoning_content) that both paths must carry.
+type streamDelta struct {
+	Content          string         `json:"content"`
+	ReasoningContent string         `json:"reasoning_content"`
+	ToolCalls        []ChatToolCall `json:"tool_calls"`
+}
+
+type streamChoice struct {
+	Delta        streamDelta `json:"delta"`
+	FinishReason string      `json:"finish_reason"`
+}
+
 // streamChunk is one upstream SSE data payload. Only the fields the assistant
 // consumes are declared; unknown fields are ignored by json.Unmarshal.
 type streamChunk struct {
-	Choices []struct {
-		Delta struct {
-			Content   string         `json:"content"`
-			ToolCalls []ChatToolCall `json:"tool_calls"`
-		} `json:"delta"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-	Error *struct {
+	Choices []streamChoice `json:"choices"`
+	Error   *struct {
 		Message string `json:"message"`
 	} `json:"error"`
 }
@@ -164,20 +183,28 @@ func (s *Stream) Next(ctx context.Context) (streamChunk, bool, error) {
 func (s *Stream) Close() { _ = s.body.Close() }
 
 // upstreamRequest is the wire shape sent to the provider. ToolChoice is
-// omitted entirely when there are no tools.
+// omitted entirely when there are no tools, and ReasoningEffort when the admin
+// left the dial alone.
 type upstreamRequest struct {
-	Model      string        `json:"model"`
-	Messages   []ChatMessage `json:"messages"`
-	Tools      []ToolDef     `json:"tools,omitempty"`
-	ToolChoice string        `json:"tool_choice,omitempty"`
-	Stream     bool          `json:"stream"`
+	Model           string        `json:"model"`
+	Messages        []ChatMessage `json:"messages"`
+	Tools           []ToolDef     `json:"tools,omitempty"`
+	ToolChoice      string        `json:"tool_choice,omitempty"`
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+	Stream          bool          `json:"stream"`
 }
 
 // StreamRequest opens a streaming chat completion. On a non-2xx it returns a
 // classified user-facing error; on a 2xx non-SSE response it falls back to a
 // one-shot stream. The caller owns the returned Stream and must Close it.
 func (c *Client) StreamRequest(ctx context.Context, msgs []ChatMessage, tools []ToolDef) (*Stream, error) {
-	req := upstreamRequest{Model: c.model, Messages: msgs, Tools: tools, Stream: true}
+	req := upstreamRequest{
+		Model:           c.model,
+		Messages:        msgs,
+		Tools:           tools,
+		ReasoningEffort: c.reasoningEffort,
+		Stream:          true,
+	}
 	if len(tools) > 0 {
 		req.ToolChoice = "auto"
 	}
@@ -230,8 +257,9 @@ func (c *Client) StreamRequest(ctx context.Context, msgs []ChatMessage, tools []
 	var nonStream struct {
 		Choices []struct {
 			Message struct {
-				Content   string         `json:"content"`
-				ToolCalls []ChatToolCall `json:"tool_calls"`
+				Content          string         `json:"content"`
+				ReasoningContent string         `json:"reasoning_content"`
+				ToolCalls        []ChatToolCall `json:"tool_calls"`
 			} `json:"message"`
 		} `json:"choices"`
 	}
@@ -240,17 +268,12 @@ func (c *Client) StreamRequest(ctx context.Context, msgs []ChatMessage, tools []
 	}
 	chunk := streamChunk{}
 	if len(nonStream.Choices) > 0 {
-		chunk.Choices = []struct {
-			Delta struct {
-				Content   string         `json:"content"`
-				ToolCalls []ChatToolCall `json:"tool_calls"`
-			} `json:"delta"`
-			FinishReason string `json:"finish_reason"`
-		}{{
-			Delta: struct {
-				Content   string         `json:"content"`
-				ToolCalls []ChatToolCall `json:"tool_calls"`
-			}{Content: nonStream.Choices[0].Message.Content, ToolCalls: nonStream.Choices[0].Message.ToolCalls},
+		chunk.Choices = []streamChoice{{
+			Delta: streamDelta{
+				Content:          nonStream.Choices[0].Message.Content,
+				ReasoningContent: nonStream.Choices[0].Message.ReasoningContent,
+				ToolCalls:        nonStream.Choices[0].Message.ToolCalls,
+			},
 		}}
 	}
 	return &Stream{fallback: &chunk}, nil

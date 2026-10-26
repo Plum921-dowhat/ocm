@@ -7208,12 +7208,22 @@ export interface components {
             baseUrl: string;
             enabled: boolean;
             model: string;
+            /**
+             * @description ReasoningEffort is "" (provider default), none, low, medium, high, xhigh
+             *     or max. "none" switches the reasoning trace off.
+             */
+            reasoningEffort: string;
         };
         "ai.Settings": {
             apiKey: string;
             baseUrl: string;
             enabled: boolean;
             model: string;
+            /**
+             * @description ReasoningEffort is the thinking-depth dial sent as reasoning_effort.
+             *     Empty leaves the provider default untouched.
+             */
+            reasoningEffort: string;
         };
         "attendance.CheckinInput": {
             durationMinute: number;

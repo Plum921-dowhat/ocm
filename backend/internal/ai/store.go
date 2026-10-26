@@ -19,14 +19,22 @@ func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 func (s *Store) Migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS ai_settings (
-		    id         INTEGER      PRIMARY KEY,
-		    enabled    BOOLEAN      NOT NULL DEFAULT false,
-		    base_url   VARCHAR(255) NOT NULL DEFAULT '',
-		    api_key    VARCHAR(255) NOT NULL DEFAULT '',
-		    model      VARCHAR(128) NOT NULL DEFAULT '',
-		    updated_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+		    id               INTEGER      PRIMARY KEY,
+		    enabled          BOOLEAN      NOT NULL DEFAULT false,
+		    base_url         VARCHAR(255) NOT NULL DEFAULT '',
+		    api_key          VARCHAR(255) NOT NULL DEFAULT '',
+		    model            VARCHAR(128) NOT NULL DEFAULT '',
+		    reasoning_effort VARCHAR(16)  NOT NULL DEFAULT '',
+		    updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
 		)`); err != nil {
 		return fmt.Errorf("ai migrate: %w", err)
+	}
+	// CREATE TABLE IF NOT EXISTS cannot add columns to a table that already
+	// exists, so the reasoning dial is added on its own. ADD COLUMN IF NOT
+	// EXISTS keeps this idempotent; the default keeps existing rows valid.
+	if _, err := s.db.ExecContext(ctx,
+		`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS reasoning_effort VARCHAR(16) NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("ai migrate reasoning_effort: %w", err)
 	}
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO ai_settings (id) VALUES (1) ON CONFLICT DO NOTHING`); err != nil {
@@ -41,8 +49,8 @@ func (s *Store) Migrate(ctx context.Context) error {
 func (s *Store) Get(ctx context.Context) (Settings, error) {
 	var v Settings
 	err := s.db.QueryRowContext(ctx,
-		`SELECT enabled, base_url, api_key, model FROM ai_settings WHERE id = 1`).
-		Scan(&v.Enabled, &v.BaseURL, &v.APIKey, &v.Model)
+		`SELECT enabled, base_url, api_key, model, reasoning_effort FROM ai_settings WHERE id = 1`).
+		Scan(&v.Enabled, &v.BaseURL, &v.APIKey, &v.Model, &v.ReasoningEffort)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Settings{}, nil
 	}
@@ -58,9 +66,9 @@ func (s *Store) Get(ctx context.Context) (Settings, error) {
 func (s *Store) Update(ctx context.Context, in Settings) error {
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE ai_settings
-		 SET enabled = $1, base_url = $2, api_key = $3, model = $4, updated_at = now()
+		 SET enabled = $1, base_url = $2, api_key = $3, model = $4, reasoning_effort = $5, updated_at = now()
 		 WHERE id = 1`,
-		in.Enabled, in.BaseURL, in.APIKey, in.Model); err != nil {
+		in.Enabled, in.BaseURL, in.APIKey, in.Model, in.ReasoningEffort); err != nil {
 		return fmt.Errorf("update ai settings: %w", err)
 	}
 	return nil

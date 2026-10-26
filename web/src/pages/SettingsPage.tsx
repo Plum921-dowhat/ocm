@@ -464,7 +464,12 @@ const AI_DEFAULTS: AiMaskedSettings = {
   model: '',
   apiKey: '',
   apiKeySet: false,
+  reasoningEffort: '',
 }
+
+// The dial values the backend accepts (internal/ai/model.go ReasoningEfforts).
+// "" means the field is not sent at all, keeping the provider default.
+const AI_EFFORTS = ['', 'none', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
 function AiSection({ disabled }: { disabled: boolean }) {
   const { t } = useTranslation('settings')
@@ -517,6 +522,18 @@ function AiSection({ disabled }: { disabled: boolean }) {
           status={form.enabled && !form.model.trim() ? 'error' : undefined}
           disabled={disabled || !s.loaded}
           onChange={(e) => setForm({ ...form, model: e.target.value })}
+        />
+      </SettingsRow>
+      <SettingsRow label={t('ai.effort')} htmlFor="ai-effort" hint={t('ai.effortHint')}>
+        <Select
+          id="ai-effort"
+          value={form.reasoningEffort}
+          disabled={disabled || !s.loaded}
+          onChange={(value) => setForm({ ...form, reasoningEffort: value })}
+          options={AI_EFFORTS.map((value) => ({
+            value,
+            label: t(`ai.effortLevel.${value || 'default'}`),
+          }))}
         />
       </SettingsRow>
       <SettingsRow label={t('ai.apiKey')} htmlFor="ai-api-key" hint={t('ai.apiKeyHint')}>

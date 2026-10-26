@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -162,5 +163,48 @@ func TestClampLimit(t *testing.T) {
 		if got := clampLimit(in); got != want {
 			t.Errorf("clampLimit(%d) = %d, want %d", in, got, want)
 		}
+	}
+}
+
+// TestConsumeStreamForwardsReasoning pins the thinking-channel wiring: the
+// reasoning trace is emitted as its own event (never mixed into the answer)
+// and returned so the tool-call turn can echo it back upstream.
+func TestConsumeStreamForwardsReasoning(t *testing.T) {
+	chunk := streamChunk{Choices: []streamChoice{{
+		Delta: streamDelta{ReasoningContent: "先看日期是周几", Content: "明天晚上 9-10 节有 37 间空闲。"},
+	}}}
+	stream := &Stream{fallback: &chunk}
+
+	var events []string
+	emit := func(name string, _ any) { events = append(events, name) }
+	text, reasoning, calls, err := (&Agent{}).consumeStream(context.Background(), stream, emit)
+	if err != nil {
+		t.Fatalf("consumeStream: %v", err)
+	}
+	if text != "明天晚上 9-10 节有 37 间空闲。" {
+		t.Errorf("text = %q", text)
+	}
+	if reasoning != "先看日期是周几" {
+		t.Errorf("reasoning = %q", reasoning)
+	}
+	if len(calls) != 0 {
+		t.Errorf("unexpected tool calls: %+v", calls)
+	}
+	if len(events) != 2 || events[0] != "thinking" || events[1] != "delta" {
+		t.Errorf("want [thinking delta], got %v", events)
+	}
+}
+
+// TestToolEventCarriesCounts covers the thinking-chain labels: the ok event
+// exposes total/shown without shipping the rows to the browser.
+func TestResultCounts(t *testing.T) {
+	if total, shown, ok := resultCounts(`{"classrooms":[{"id":1}],"total":137,"shown":80}`); !ok || total != 137 || shown != 80 {
+		t.Errorf("counts = %d/%d ok=%v", total, shown, ok)
+	}
+	if _, _, ok := resultCounts("节次 9 不在该日期的作息制度内。"); ok {
+		t.Error("plain-text results must not report counts")
+	}
+	if _, _, ok := resultCounts(`{"date":"2026-10-27"}`); ok {
+		t.Error("results without total/shown must not report counts")
 	}
 }

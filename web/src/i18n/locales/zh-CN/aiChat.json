@@ -7,7 +7,7 @@
   "stopped": "已停止生成",
   "disclaimer": "内容由 AI 生成，请核对后使用。",
   "strings": {
-    "input_placeholder": "例如：周一 5-7 节有哪些可容纳 50 人的空闲教室？",
+    "input_placeholder": "与 AI 助手对话",
     "input_ariaLabel": "向 AI 助手提问",
     "input_buttonLabel": "发送",
     "window_title": "AI 助手",
@@ -41,10 +41,15 @@
     "query_timetable": "查询课表",
     "propose_booking": "生成预约方案"
   },
-  "tool": {
-    "running": "{{label}}中…",
-    "ok": "已{{label}}",
-    "error": "{{label}}失败"
+  "thinking": {
+    "running": "正在思考…",
+    "done": "已思考 {{seconds}} 秒",
+    "stepCount": "{{count}} 个步骤",
+    "expand": "展开思考过程",
+    "collapse": "收起思考过程",
+    "periods": "第 {{start}}-{{end}} 节",
+    "found": "共 {{total}} 条",
+    "foundPartial": "共 {{total}} 条，显示 {{shown}} 条"
   },
   "error": {
     "fallback": "AI 助手暂时无法回答，请稍后重试",

@@ -130,16 +130,9 @@ func TestStreamUpstreamErrorChunk(t *testing.T) {
 
 func TestStreamFallbackNonSSE(t *testing.T) {
 	chunk := streamChunk{}
-	chunk.Choices = []struct {
-		Delta struct {
-			Content   string         `json:"content"`
-			ToolCalls []ChatToolCall `json:"tool_calls"`
-		} `json:"delta"`
-		FinishReason string `json:"finish_reason"`
-	}{{Delta: struct {
-		Content   string         `json:"content"`
-		ToolCalls []ChatToolCall `json:"tool_calls"`
-	}{Content: "一次性回答"}}}
+	chunk.Choices = []streamChoice{{
+		Delta: streamDelta{Content: "一次性回答", ReasoningContent: "先想一想"},
+	}}
 	s := &Stream{fallback: &chunk}
 
 	got, event, err := s.Next(context.Background())
@@ -148,6 +141,9 @@ func TestStreamFallbackNonSSE(t *testing.T) {
 	}
 	if got.Choices[0].Delta.Content != "一次性回答" {
 		t.Fatalf("content = %q", got.Choices[0].Delta.Content)
+	}
+	if got.Choices[0].Delta.ReasoningContent != "先想一想" {
+		t.Fatalf("reasoning = %q", got.Choices[0].Delta.ReasoningContent)
 	}
 	if _, _, err := s.Next(context.Background()); !errors.Is(err, io.EOF) {
 		t.Fatalf("second Next err = %v, want EOF", err)
