@@ -5,7 +5,7 @@ import { CloseOutlined, PlusOutlined, RobotOutlined, UserOutlined } from '@ant-d
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthContext'
 import { aiChatState } from './chatInstance'
-import { ProposalCard, ToolIndicator } from './aiChatItems'
+import { ProposalCard, ThinkingChain } from './aiChatItems'
 import MessageMarkdown from './MessageMarkdown'
 import {
   abortChat,
@@ -159,11 +159,21 @@ export default function AiChat() {
                       variant="borderless"
                       className="ai-chat__bubble"
                       avatar={<Avatar size={26} icon={<RobotOutlined />} className="ai-chat__avatar ai-chat__avatar--ai" />}
-                      loading={m.status === 'streaming' && !m.content && !m.tools?.length && !m.proposal && !m.error}
+                      loading={
+                        m.status === 'streaming' &&
+                        !m.content &&
+                        !m.steps?.length &&
+                        !m.proposal &&
+                        !m.error
+                      }
                       streaming={m.status === 'streaming' && Boolean(m.content)}
                       content={
                         <div className="ai-chat__answer">
-                          <ToolIndicator tools={m.tools} />
+                          <ThinkingChain
+                            steps={m.steps}
+                            thinkingMs={m.thinkingMs}
+                            streaming={m.status === 'streaming'}
+                          />
                           {m.content && (
                             <MessageMarkdown content={m.content} streaming={m.status === 'streaming'} />
                           )}

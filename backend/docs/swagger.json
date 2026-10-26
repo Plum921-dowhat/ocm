@@ -6684,7 +6684,8 @@
                 "apiKeySet",
                 "baseUrl",
                 "enabled",
-                "model"
+                "model",
+                "reasoningEffort"
             ],
             "properties": {
                 "apiKey": {
@@ -6701,6 +6702,10 @@
                 },
                 "model": {
                     "type": "string"
+                },
+                "reasoningEffort": {
+                    "description": "ReasoningEffort is \"\" (provider default), none, low, medium, high, xhigh\nor max. \"none\" switches the reasoning trace off.",
+                    "type": "string"
                 }
             }
         },
@@ -6710,7 +6715,8 @@
                 "apiKey",
                 "baseUrl",
                 "enabled",
-                "model"
+                "model",
+                "reasoningEffort"
             ],
             "properties": {
                 "apiKey": {
@@ -6723,6 +6729,10 @@
                     "type": "boolean"
                 },
                 "model": {
+                    "type": "string"
+                },
+                "reasoningEffort": {
+                    "description": "ReasoningEffort is the thinking-depth dial sent as reasoning_effort.\nEmpty leaves the provider default untouched.",
                     "type": "string"
                 }
             }

@@ -67,6 +67,17 @@
     "enabledLabel": "启用 AI 助手",
     "baseUrl": "API 地址 (Base URL)",
     "model": "模型名称",
+    "effort": "思考深度",
+    "effortHint": "留空即沿用模型默认（DeepSeek 默认开启思考、档位 high）。选择「关闭思考」可省掉思维链的等待与 token，适合查教室这类简单任务。",
+    "effortLevel": {
+      "default": "跟随模型默认",
+      "none": "关闭思考",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "xhigh": "更高",
+      "max": "最高"
+    },
     "apiKey": "API 密钥",
     "apiKeyHint": "留空表示不修改已保存的密钥"
   },

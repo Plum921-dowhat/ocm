@@ -91,14 +91,14 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewClient(settings.BaseURL, settings.APIKey, settings.Model)
+	client := NewClient(settings.BaseURL, settings.APIKey, settings.Model, settings.ReasoningEffort)
 	agent := NewAgent(client, h.classrooms, h.regimes, h.courses, h.bookings, subject)
 
 	// Preflight the first upstream round before committing to the stream, so
 	// transport-level failures still answer as JSON (and audit as such).
 	ctx, cancel := context.WithTimeout(r.Context(), totalTimeout)
 	defer cancel()
-	msgs := agent.buildMessages(in.Messages)
+	msgs := agent.buildMessages(ctx, in.Messages)
 	roundCtx, roundCancel := context.WithTimeout(ctx, roundTimeout)
 	stream, err := client.StreamRequest(roundCtx, msgs, agent.Definitions())
 	if err != nil {

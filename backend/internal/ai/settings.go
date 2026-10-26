@@ -33,15 +33,19 @@ type MaskedSettings struct {
 	APIKey    string `json:"apiKey"`
 	APIKeySet bool   `json:"apiKeySet"`
 	Model     string `json:"model"`
+	// ReasoningEffort is "" (provider default), none, low, medium, high, xhigh
+	// or max. "none" switches the reasoning trace off.
+	ReasoningEffort string `json:"reasoningEffort"`
 }
 
 func masked(s Settings) MaskedSettings {
 	return MaskedSettings{
-		Enabled:   s.Enabled,
-		BaseURL:   s.BaseURL,
-		APIKey:    "",
-		APIKeySet: s.APIKey != "",
-		Model:     s.Model,
+		Enabled:         s.Enabled,
+		BaseURL:         s.BaseURL,
+		APIKey:          "",
+		APIKeySet:       s.APIKey != "",
+		Model:           s.Model,
+		ReasoningEffort: s.ReasoningEffort,
 	}
 }
 

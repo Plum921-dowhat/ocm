@@ -6692,7 +6692,8 @@ const docTemplate = `{
                 "apiKeySet",
                 "baseUrl",
                 "enabled",
-                "model"
+                "model",
+                "reasoningEffort"
             ],
             "properties": {
                 "apiKey": {
@@ -6709,6 +6710,10 @@ const docTemplate = `{
                 },
                 "model": {
                     "type": "string"
+                },
+                "reasoningEffort": {
+                    "description": "ReasoningEffort is \"\" (provider default), none, low, medium, high, xhigh\nor max. \"none\" switches the reasoning trace off.",
+                    "type": "string"
                 }
             }
         },
@@ -6718,7 +6723,8 @@ const docTemplate = `{
                 "apiKey",
                 "baseUrl",
                 "enabled",
-                "model"
+                "model",
+                "reasoningEffort"
             ],
             "properties": {
                 "apiKey": {
@@ -6731,6 +6737,10 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "model": {
+                    "type": "string"
+                },
+                "reasoningEffort": {
+                    "description": "ReasoningEffort is the thinking-depth dial sent as reasoning_effort.\nEmpty leaves the provider default untouched.",
                     "type": "string"
                 }
             }

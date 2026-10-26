@@ -67,6 +67,17 @@
     "enabledLabel": "Enable AI assistant",
     "baseUrl": "Base URL",
     "model": "Model name",
+    "effort": "Reasoning effort",
+    "effortHint": "Leave on the model default (DeepSeek thinks at effort “high” unless told otherwise). “No thinking” skips the reasoning trace entirely — faster and cheaper for simple lookups.",
+    "effortLevel": {
+      "default": "Model default",
+      "none": "No thinking",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "xhigh": "Extra high",
+      "max": "Max"
+    },
     "apiKey": "API key",
     "apiKeyHint": "Leave blank to keep the stored key"
   },

@@ -7,7 +7,7 @@
   "stopped": "Generation stopped",
   "disclaimer": "AI-generated content. Verify before use.",
   "strings": {
-    "input_placeholder": "e.g. Which free classrooms seat 50+ during Mon periods 5–7?",
+    "input_placeholder": "Chat with the AI assistant",
     "input_ariaLabel": "Ask the AI assistant",
     "input_buttonLabel": "Send",
     "window_title": "AI assistant",
@@ -41,10 +41,15 @@
     "query_timetable": "Query timetable",
     "propose_booking": "Propose booking"
   },
-  "tool": {
-    "running": "{{label}}…",
-    "ok": "{{label}} done",
-    "error": "{{label}} failed"
+  "thinking": {
+    "running": "Thinking…",
+    "done": "Thought for {{seconds}}s",
+    "stepCount": "{{count}} step(s)",
+    "expand": "Expand the thinking process",
+    "collapse": "Collapse the thinking process",
+    "periods": "periods {{start}}-{{end}}",
+    "found": "{{total}} result(s)",
+    "foundPartial": "{{total}} result(s), {{shown}} shown"
   },
   "error": {
     "fallback": "The AI assistant can't answer right now, please try again",

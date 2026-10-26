@@ -1,6 +1,6 @@
 import { apiStream } from '../auth/api'
 import i18n from '../i18n/index'
-import type { AiProposal, AiTool } from './aiChatItems'
+import type { AiProposal, AiStep } from './aiChatItems'
 
 // The conversation lives outside React on purpose.
 //
@@ -13,7 +13,10 @@ export interface ChatMessage {
   key: string
   role: 'user' | 'assistant'
   content: string
-  tools?: AiTool[]
+  /** Reasoning chunks and tool calls in arrival order (see AiStep). */
+  steps?: AiStep[]
+  /** Wall-clock milliseconds spent before the answer started (thinking + tools). */
+  thinkingMs?: number
   proposal?: AiProposal | null
   error?: string
   status?: 'streaming' | 'done' | 'aborted'
@@ -115,7 +118,7 @@ export async function sendChat(raw: string, token: string | null) {
     messages: [
       ...state.messages,
       { key: nextKey(), role: 'user', content: text, status: 'done' },
-      { key: assistantKey, role: 'assistant', content: '', tools: [], status: 'streaming' },
+      { key: assistantKey, role: 'assistant', content: '', steps: [], status: 'streaming' },
     ],
     streaming: true,
     draft: '',
@@ -127,7 +130,15 @@ export async function sendChat(raw: string, token: string | null) {
   }
 
   let textAcc = ''
-  let tools: AiTool[] = []
+  // Reasoning and tool events arrive interleaved and in the order the model
+  // produced them, so they share one list; regrouping them by type would show
+  // a sequence that never happened.
+  let steps: AiStep[] = []
+  // Frozen at the first answer delta: everything before it is the "thinking"
+  // phase the collapse header reports. Left undefined until then so the header
+  // can show a running state instead of a stale 0s.
+  let thinkingMs: number | undefined
+  const startedAt = Date.now()
   let proposal: AiProposal | null = null
   let failed = ''
   let aborted = false
@@ -140,26 +151,42 @@ export async function sendChat(raw: string, token: string | null) {
     flushTimer = null
     if (!dirty) return
     dirty = false
-    update({ content: textAcc })
+    update({ content: textAcc, steps, thinkingMs })
   }
   const scheduleFlush = () => {
     dirty = true
     if (!flushTimer) flushTimer = setTimeout(flush, 60)
   }
 
+  const sameTool = (step: AiStep, data: Record<string, any>) =>
+    step.kind === 'tool' &&
+    step.status === 'running' &&
+    (data.id ? step.id === data.id : step.name === data.name)
+
   const onEvent = (name: string, data: Record<string, any> | null) => {
-    if (name === 'delta' && data?.content) {
+    if (name === 'thinking' && data?.content) {
+      const last = steps[steps.length - 1]
+      steps =
+        last?.kind === 'thinking'
+          ? // Consecutive chunks of one reasoning block stay together.
+            [...steps.slice(0, -1), { kind: 'thinking', text: last.text + data.content }]
+          : [...steps, { kind: 'thinking', text: data.content }]
+      scheduleFlush()
+    } else if (name === 'delta' && data?.content) {
+      if (thinkingMs === undefined) thinkingMs = Date.now() - startedAt
       textAcc += data.content
       scheduleFlush()
     } else if (name === 'tool') {
       if (data!.status === 'running') {
-        tools = [...tools, { name: data!.name, status: 'running' }]
+        steps = [...steps, { kind: 'tool', id: data!.id, name: data!.name, status: 'running', args: data!.args }]
       } else {
-        tools = tools.map((tool) =>
-          tool.name === data!.name && tool.status === 'running' ? { ...tool, status: data!.status } : tool,
+        steps = steps.map((step) =>
+          sameTool(step, data!)
+            ? { ...step, status: data!.status, total: data!.total, shown: data!.shown }
+            : step,
         )
       }
-      update({ tools: tools.map((tool) => ({ ...tool })) })
+      update({ steps })
     } else if (name === 'proposal') {
       proposal = { ...data, state: 'proposed', error: '' } as AiProposal
       update({ proposal })
@@ -190,7 +217,14 @@ export async function sendChat(raw: string, token: string | null) {
       history = [...history, { role: 'user', content: text }]
       if (textAcc) history.push({ role: 'assistant', content: textAcc })
       if (aborted) {
-        tools = tools.map((tool) => (tool.status === 'running' ? { ...tool, status: 'error' } : tool))
+        steps = steps.map((step) =>
+          step.kind === 'tool' && step.status === 'running' ? { ...step, status: 'error' } : step,
+        )
+      }
+      // A turn that failed (or was aborted) before any answer arrived still
+      // reports the time it spent, so the collapsed header is never "0 秒".
+      if (thinkingMs === undefined && steps.length > 0) {
+        thinkingMs = Date.now() - startedAt
       }
       patch({
         messages: state.messages.map((m) =>
@@ -198,7 +232,8 @@ export async function sendChat(raw: string, token: string | null) {
             ? {
                 ...m,
                 content: textAcc,
-                tools,
+                steps,
+                thinkingMs,
                 proposal,
                 error: failed || undefined,
                 status: aborted ? 'aborted' : 'done',

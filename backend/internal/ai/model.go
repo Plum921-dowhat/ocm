@@ -13,6 +13,26 @@ const (
 	maxModelLen   = 128
 )
 
+// ReasoningEfforts are the accepted reasoning_effort values. The empty string
+// means "do not send the field at all", which keeps the provider default
+// (thinking on, at its own default depth) — the only setting that is safe for
+// models with no reasoning support.
+//
+// DeepSeek documents none/low/high/max ("none" also switches thinking off);
+// Ark accepts all seven and maps medium/xhigh onto the model's own ladder.
+// deepseek-v4-1-flash treats thinking as on by default, so "none" is how the
+// assistant runs without a reasoning trace.
+var ReasoningEfforts = []string{"", "none", "low", "medium", "high", "xhigh", "max"}
+
+func validReasoningEffort(v string) bool {
+	for _, e := range ReasoningEfforts {
+		if e == v {
+			return true
+		}
+	}
+	return false
+}
+
 // Settings is the admin-editable LLM configuration (single row, id=1).
 // APIKey is stored as configured and never leaves the backend: the GET
 // response masks it and reports APIKeySet instead.
@@ -21,6 +41,9 @@ type Settings struct {
 	BaseURL string `json:"baseUrl"`
 	APIKey  string `json:"apiKey"`
 	Model   string `json:"model"`
+	// ReasoningEffort is the thinking-depth dial sent as reasoning_effort.
+	// Empty leaves the provider default untouched.
+	ReasoningEffort string `json:"reasoningEffort"`
 }
 
 // Normalize trims string fields and drops a trailing slash from the base URL
@@ -29,6 +52,7 @@ func (s *Settings) Normalize() {
 	s.BaseURL = strings.TrimSuffix(strings.TrimSpace(s.BaseURL), "/")
 	s.APIKey = strings.TrimSpace(s.APIKey)
 	s.Model = strings.TrimSpace(s.Model)
+	s.ReasoningEffort = strings.ToLower(strings.TrimSpace(s.ReasoningEffort))
 }
 
 // validate returns an error message when the settings cannot be activated
@@ -45,6 +69,9 @@ func validate(in *Settings) (string, bool) {
 	}
 	if len(in.Model) > maxModelLen {
 		return "model is too long", false
+	}
+	if !validReasoningEffort(in.ReasoningEffort) {
+		return "reasoningEffort must be one of " + strings.Join(ReasoningEfforts, ", "), false
 	}
 	if in.BaseURL != "" {
 		u, err := url.Parse(in.BaseURL)
