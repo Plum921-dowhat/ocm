@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"ocm-backend/internal/authz"
 	"ocm-backend/internal/booking"
@@ -32,7 +33,32 @@ const (
 	totalTimeout = 10 * time.Minute
 	idleTimeout  = 60 * time.Second
 
-	maxToolResultLen = 4000
+	// maxToolResultBytes caps one tool result handed to the model. Results are
+	// appended to the turn's messages, so every later round re-sends them; the
+	// real cost is this budget times the number of tool rounds, which is why it
+	// stays in the low tens of KB instead of "whatever the context allows".
+	maxToolResultBytes = 12000
+
+	// envelopeReserve is headroom for the JSON envelope plus the truncation
+	// note added after the list budget is computed (a note is ~60 Chinese
+	// chars, i.e. under 200 bytes; the envelope keys are a few dozen).
+	envelopeReserve = 400
+
+	// maxToolListItems caps how many rows a list tool asks the store for. The
+	// byte budget usually binds first; this is the guard for very compact rows.
+	maxToolListItems = 200
+
+	// maxToolErrorPreview bounds the failed-tool message echoed to the browser
+	// (clients render only the status tag, so this exists for diagnosis).
+	maxToolErrorPreview = 400
+)
+
+// Truncation notes. They are prose on purpose: the model relays them to the
+// user, so a structured hint would be cheaper but would rarely surface.
+const (
+	classroomListNote = "共 %d 间教室匹配，此处给出 %d 间。缩小范围请传 building、type、capacityMin 或 q。"
+	availableNote     = "共 %d 间空闲教室，此处给出 %d 间（含容量最小的与最大的各一部分）。缩小范围请传 building、type 或 capacityMin。"
+	timetableNote     = "共 %d 节课，此处给出 %d 节（最早与最晚的各一部分）。请缩短日期范围，或用 date/weekOf 精确查询。"
 )
 
 // Tool is one assistant tool: its OpenAI function definition plus the
@@ -146,7 +172,7 @@ func regimeBlock(now time.Time, regimes []schedule.Regime) string {
 func (a *Agent) Definitions() []ToolDef {
 	return []ToolDef{
 		NewToolDef("list_classrooms",
-			"查询教室列表。可按最小容量、楼栋、教室类型或名称关键字筛选。返回教室的编号、名称、楼栋、容量、类型、楼层、校区与状态（available=可用）。",
+			"查询教室列表。可按最小容量、楼栋、教室类型或名称关键字筛选。返回教室的编号、名称、楼栋、容量、类型、楼层、校区与状态（available=可用）。结果有长度上限，超出时返回 total（匹配总数）、shown（实际条数）与说明，请据此缩小条件而不是重复查询。",
 			map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -155,11 +181,12 @@ func (a *Agent) Definitions() []ToolDef {
 					"type": map[string]any{"type": "string", "description": "教室类型",
 						"enum": []string{"standard", "multimedia", "computer", "lab", "lecture_hall",
 							"stadium", "drawing", "language", "studio", "special"}},
-					"q": map[string]any{"type": "string", "description": "教室名称关键字"},
+					"q":     map[string]any{"type": "string", "description": "教室名称关键字"},
+					"limit": map[string]any{"type": "integer", "description": "最多返回多少条，可选（默认取上限）"},
 				},
 			}),
 		NewToolDef("query_availability",
-			"查询某一天某个节次区间内空闲且可用的教室（可同时按最小容量筛选）。空闲=该教室在该日期该节次区间没有课程（course session）也没有待审批/已通过的预约。必须提供具体日期（YYYY-MM-DD）与节次区间，节次必须是该日期生效作息制度中存在的节次。返回作息制度名称、节次对应时间与空闲教室列表。",
+			"查询某一天某个节次区间内空闲且可用的教室（可同时按最小容量、楼栋、教室类型筛选）。空闲=该教室在该日期该节次区间没有课程（course session）也没有待审批/已通过的预约。必须提供具体日期（YYYY-MM-DD）与节次区间，节次必须是该日期生效作息制度中存在的节次。返回作息制度名称、节次对应时间与空闲教室列表；结果有长度上限，超出时返回 total/shown 与说明，请据此缩小条件。",
 			map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -167,20 +194,26 @@ func (a *Agent) Definitions() []ToolDef {
 					"periodStart": map[string]any{"type": "integer", "description": "起始节次，从 1 开始"},
 					"periodEnd":   map[string]any{"type": "integer", "description": "结束节次（含）"},
 					"capacityMin": map[string]any{"type": "integer", "description": "最小容纳人数，可选"},
+					"building":    map[string]any{"type": "string", "description": "楼栋关键字，可选，如“A”"},
+					"type": map[string]any{"type": "string", "description": "教室类型，可选",
+						"enum": []string{"standard", "multimedia", "computer", "lab", "lecture_hall",
+							"stadium", "drawing", "language", "studio", "special"}},
+					"limit": map[string]any{"type": "integer", "description": "最多返回多少间，可选（默认取上限）"},
 				},
 				"required": []string{"date", "periodStart", "periodEnd"},
 			}),
 		NewToolDef("query_timetable",
-			"查询课表：按教室或按教师查询某日期范围内的上课安排。日期范围由 from/to（含）、weekOf（该周周一至周日）或 date（单日）之一给出。返回每节课的日期、星期、节次区间、课程名、教师、教学班与教室。",
+			"查询课表：按教室或按关键字（教师姓名、课程名、教学班名、教室名）查询某日期范围内的上课安排。日期范围由 from/to（含）、weekOf（该周周一至周日）或 date（单日）之一给出。返回每节课的日期、星期、节次区间、课程名、教师、教学班与教室；结果有长度上限，超出时返回 total/shown 与说明。",
 			map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"classroomId": map[string]any{"type": "integer", "description": "教室 ID（与 teacher 二选一）"},
-					"teacher":     map[string]any{"type": "string", "description": "教师姓名关键字（与 classroomId 二选一）"},
+					"classroomId": map[string]any{"type": "integer", "description": "教室 ID（与 q 二选一）"},
+					"q":           map[string]any{"type": "string", "description": "关键字：教师姓名、课程名、教学班名或教室名（与 classroomId 二选一）"},
 					"from":        map[string]any{"type": "string", "description": "起始日期，YYYY-MM-DD（含）"},
 					"to":          map[string]any{"type": "string", "description": "结束日期，YYYY-MM-DD（含）"},
 					"weekOf":      map[string]any{"type": "string", "description": "该周任意一天的日期，YYYY-MM-DD，查整周"},
 					"date":        map[string]any{"type": "string", "description": "单日查询，YYYY-MM-DD"},
+					"limit":       map[string]any{"type": "integer", "description": "最多返回多少节，可选（默认取上限）"},
 				},
 				"required": []string{},
 			}),
@@ -410,12 +443,15 @@ func (a *Agent) executeTool(ctx context.Context, call ChatToolCall, emit func(st
 	if !ok {
 		status = "error"
 	}
-	emit("tool", map[string]any{
-		"name":   call.Function.Name,
-		"status": status,
-		"result": truncate(result, maxToolResultLen),
-	})
-	return truncate(result, maxToolResultLen), proposal, nil
+	// Clients render only the name/status tag, so the (up to 12 KB) success
+	// payload is not worth pushing down the SSE stream; keep a short preview
+	// for failures, which is where diagnosis actually needs it.
+	payload := map[string]any{"name": call.Function.Name, "status": status}
+	if !ok {
+		payload["result"] = truncate(result, maxToolErrorPreview)
+	}
+	emit("tool", payload)
+	return truncate(result, maxToolResultBytes), proposal, nil
 }
 
 // permissionFor maps a tool name to the permission its data requires.
@@ -473,26 +509,50 @@ func briefClassrooms(list []classroom.Classroom) []classroomBrief {
 	return out
 }
 
+// availableBrief is the lean row shape for availability results. status is
+// implied by the query, campus is school-wide, and floor/description are not
+// needed to pick or book a room. Dropping them roughly halves the per-room
+// cost, so the byte budget covers a whole campus in most deployments instead
+// of truncating at the smallest ~25 rooms.
+type availableBrief struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Building string `json:"building"`
+	Capacity int    `json:"capacity"`
+	Type     string `json:"type"`
+}
+
+func briefAvailable(list []classroom.Classroom) []availableBrief {
+	out := make([]availableBrief, 0, len(list))
+	for _, c := range list {
+		out = append(out, availableBrief{
+			ID: c.ID, Name: c.Name, Building: c.Building, Capacity: c.Capacity, Type: c.Type,
+		})
+	}
+	return out
+}
+
 func (a *Agent) toolListClassrooms(ctx context.Context, raw json.RawMessage) (string, bool, *ProposalPayload, error) {
 	var args struct {
 		CapacityMin int    `json:"capacityMin"`
 		Building    string `json:"building"`
 		Q           string `json:"q"`
 		Type        string `json:"type"`
+		Limit       int    `json:"limit"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return "参数解析失败：" + err.Error(), false, nil, nil
 	}
-	list, err := a.classrooms.ListFiltered(ctx, classroom.ClassroomFilter{
+	list, total, err := a.classrooms.ListFiltered(ctx, classroom.ClassroomFilter{
 		Q:           args.Q,
 		Building:    args.Building,
 		Type:        args.Type,
 		CapacityMin: args.CapacityMin,
-	}, 50)
+	}, clampLimit(args.Limit))
 	if err != nil {
 		return "", false, nil, fmt.Errorf("list classrooms: %w", err)
 	}
-	return marshalToolResult(briefClassrooms(list)), true, nil, nil
+	return marshalToolList(map[string]any{}, "classrooms", briefClassrooms(list), total, classroomListNote), true, nil, nil
 }
 
 func (a *Agent) toolQueryAvailability(ctx context.Context, raw json.RawMessage) (string, bool, *ProposalPayload, error) {
@@ -501,6 +561,9 @@ func (a *Agent) toolQueryAvailability(ctx context.Context, raw json.RawMessage) 
 		PeriodStart int    `json:"periodStart"`
 		PeriodEnd   int    `json:"periodEnd"`
 		CapacityMin int    `json:"capacityMin"`
+		Building    string `json:"building"`
+		Type        string `json:"type"`
+		Limit       int    `json:"limit"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return "参数解析失败：" + err.Error(), false, nil, nil
@@ -509,7 +572,14 @@ func (a *Agent) toolQueryAvailability(ctx context.Context, raw json.RawMessage) 
 	if !ok {
 		return msg, false, nil, nil
 	}
-	list, err := a.classrooms.ListAvailable(ctx, args.Date, args.PeriodStart, args.PeriodEnd, args.CapacityMin, 50)
+	list, total, err := a.classrooms.ListAvailable(ctx, classroom.AvailableFilter{
+		Date:        args.Date,
+		PeriodStart: args.PeriodStart,
+		PeriodEnd:   args.PeriodEnd,
+		CapacityMin: args.CapacityMin,
+		Building:    strings.TrimSpace(args.Building),
+		Type:        args.Type,
+	}, clampLimit(args.Limit))
 	if err != nil {
 		return "", false, nil, fmt.Errorf("list available classrooms: %w", err)
 	}
@@ -517,18 +587,18 @@ func (a *Agent) toolQueryAvailability(ctx context.Context, raw json.RawMessage) 
 		"date":       args.Date,
 		"regimeName": regime.Name,
 		"periods":    periodRange(regime, args.PeriodStart, args.PeriodEnd),
-		"classrooms": briefClassrooms(list),
 	}
-	return marshalToolResult(out), true, nil, nil
+	return marshalToolList(out, "classrooms", briefAvailable(list), total, availableNote), true, nil, nil
 }
 
 type timetableArgs struct {
 	ClassroomID int64  `json:"classroomId"`
-	Teacher     string `json:"teacher"`
+	Q           string `json:"q"`
 	From        string `json:"from"`
 	To          string `json:"to"`
 	WeekOf      string `json:"weekOf"`
 	Date        string `json:"date"`
+	Limit       int    `json:"limit"`
 }
 
 func (a *Agent) toolQueryTimetable(ctx context.Context, raw json.RawMessage) (string, bool, *ProposalPayload, error) {
@@ -536,25 +606,23 @@ func (a *Agent) toolQueryTimetable(ctx context.Context, raw json.RawMessage) (st
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return "参数解析失败：" + err.Error(), false, nil, nil
 	}
-	if args.ClassroomID <= 0 && strings.TrimSpace(args.Teacher) == "" {
-		return "请提供教室 ID 或教师姓名之一。", false, nil, nil
+	if args.ClassroomID <= 0 && strings.TrimSpace(args.Q) == "" {
+		return "请提供教室 ID 或关键字（教师/课程/教学班/教室名）之一。", false, nil, nil
 	}
 	from, to, msg := normalizeRange(args)
 	if msg != "" {
 		return msg, false, nil, nil
 	}
 
-	var rows []course.SessionView
-	var err error
+	// Both branches page through the same query so a classroom's whole term
+	// cannot arrive unbounded (the old ListSessions path had no SQL limit) and
+	// so the result carries an exact total for the truncation note.
+	filter := course.SessionFilter{From: from, To: to, Q: strings.TrimSpace(args.Q)}
 	if args.ClassroomID > 0 {
-		rows, err = a.courses.ListSessions(ctx, 0, args.ClassroomID, from, to)
-	} else {
-		rows, _, err = a.courses.PageSessions(ctx, course.SessionFilter{
-			Q:    strings.TrimSpace(args.Teacher),
-			From: from,
-			To:   to,
-		}, dbutil.Pagination{Limit: 200})
+		filter.ClassroomID = args.ClassroomID
+		filter.Q = ""
 	}
+	rows, total, err := a.courses.PageSessions(ctx, filter, dbutil.Pagination{Limit: clampLimit(args.Limit)})
 	if err != nil {
 		return "", false, nil, fmt.Errorf("list timetable sessions: %w", err)
 	}
@@ -571,16 +639,13 @@ func (a *Agent) toolQueryTimetable(ctx context.Context, raw json.RawMessage) (st
 	}
 	slots := make([]slot, 0, len(rows))
 	for _, v := range rows {
-		if len(slots) >= 200 {
-			break
-		}
 		slots = append(slots, slot{
 			Date: v.Date, DayOfWeek: dayOfWeek(v.Date), PeriodStart: v.PeriodStart, PeriodEnd: v.PeriodEnd,
 			CourseName: v.CourseName, Teacher: v.Teacher, TeachingClassName: v.TeachingClassName,
 			ClassroomName: v.ClassroomName,
 		})
 	}
-	return marshalToolResult(map[string]any{"from": from, "to": to, "sessions": slots}), true, nil, nil
+	return marshalToolList(map[string]any{"from": from, "to": to}, "sessions", slots, int(total), timetableNote), true, nil, nil
 }
 
 func (a *Agent) toolProposeBooking(ctx context.Context, raw json.RawMessage) (string, bool, *ProposalPayload, error) {
@@ -770,13 +835,112 @@ func parseArgs(raw json.RawMessage) any {
 	return v
 }
 
-// truncate caps a tool result for the LLM. The full data never needs to
-// round-trip: the LLM summarizes, and the frontend only sees proposals.
+// truncate caps a plain-text tool result at a UTF-8 boundary. Structured
+// results do not rely on it (marshalToolList keeps them valid by construction),
+// so this is the backstop for business rejections and stray serialization
+// text: cutting mid-rune would hand the model a broken character.
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
-	return s[:max] + "…(已截断)"
+	cut := max
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…(已截断)"
+}
+
+// clampLimit bounds the row count a tool asks the store for. Zero means "give
+// me the default upper bound"; anything above it is clamped, never rejected —
+// the model cannot know the cap, and an error would cost a whole tool round.
+func clampLimit(v int) int {
+	if v <= 0 || v > maxToolListItems {
+		return maxToolListItems
+	}
+	return v
+}
+
+// marshalToolList renders env plus a list under a byte budget. Rows are kept or
+// dropped whole — never sliced — so the output is always valid JSON, and
+// total/shown let the model say "137 matched, here are 80" instead of
+// presenting a truncated list as complete.
+//
+// Truncation samples both ends (smallest and largest rooms, earliest and
+// latest sessions) because a capacity-ascending prefix alone would tell the
+// model that large rooms do not exist. Paging is deliberately not offered: a
+// tool round plus the result staying in the transcript for every later round
+// makes it the most expensive way to see more, and the user wants an answer,
+// not 500 rows.
+func marshalToolList[T any](env map[string]any, key string, items []T, total int, noteFmt string) string {
+	return marshalToolListBudget(env, key, items, total, noteFmt, maxToolResultBytes)
+}
+
+// marshalToolListBudget is marshalToolList with an injectable budget so tests
+// can exercise the truncation path without building 12 KB of fixtures.
+func marshalToolListBudget[T any](env map[string]any, key string, items []T, total int, noteFmt string, budget int) string {
+	sizes := make([]int, len(items))
+	for i, it := range items {
+		b, err := json.Marshal(it)
+		if err != nil {
+			continue
+		}
+		sizes[i] = len(b)
+	}
+	// The envelope is measured before the list is attached: its keys, the
+	// periods array and the like are all fixed costs of this result.
+	remaining := budget - len(marshalToolResult(env)) - envelopeReserve
+	kept := items
+	if listBytes(sizes) > remaining {
+		kept = sampleBothEnds(items, sizes, remaining)
+	}
+
+	env[key] = kept
+	env["total"] = total
+	env["shown"] = len(kept)
+	if len(kept) < total {
+		env["truncated"] = true
+		env["note"] = fmt.Sprintf(noteFmt, total, len(kept))
+	}
+	return marshalToolResult(env)
+}
+
+// sampleBothEnds takes rows from the head until half the budget is spent, then
+// from the tail with what is left. At least one row survives: an empty list
+// reads as "nothing found", which is a worse lie than an incomplete one.
+func sampleBothEnds[T any](items []T, sizes []int, budget int) []T {
+	if len(items) == 0 {
+		return items
+	}
+	if budget <= 0 {
+		return items[:1]
+	}
+	half := budget / 2
+	head, usedHead := 0, 0
+	for head < len(items) && usedHead+sizes[head]+1 <= half {
+		usedHead += sizes[head] + 1
+		head++
+	}
+	if head == 0 {
+		return items[:1]
+	}
+	tail, usedTail := len(items), 0
+	for tail > head && usedTail+sizes[tail-1]+1 <= budget-usedHead {
+		usedTail += sizes[tail-1] + 1
+		tail--
+	}
+	out := make([]T, 0, head+len(items)-tail)
+	out = append(out, items[:head]...)
+	out = append(out, items[tail:]...)
+	return out
+}
+
+// listBytes is the serialized size of the rows plus their separating commas.
+func listBytes(sizes []int) int {
+	n := 0
+	for _, s := range sizes {
+		n += s + 1
+	}
+	return n
 }
 
 // newProposalID returns a random 8-byte hex id for a proposal event.

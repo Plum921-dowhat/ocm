@@ -54,6 +54,12 @@ const (
 
 const columns = "id, name, building, capacity, type, floor, campus, status, description, created_at"
 
+// defaultListLimit bounds the list queries when the caller passes no limit.
+// It is deliberately generous: the AI assistant applies its own byte budget on
+// top, and a SQL limit that binds first would make that budget unreachable
+// while silently hiding rows (and their totals would still look right).
+const defaultListLimit = 200
+
 // Store manages classroom records in the classrooms table.
 type Store struct {
 	db *sql.DB
@@ -156,8 +162,9 @@ type ClassroomFilter struct {
 
 // ListFiltered returns up to limit classrooms matching the filter, ordered by
 // capacity then id so the assistant sees the smallest rooms that still fit
-// first. limit is capped at 50 by the caller.
-func (s *Store) ListFiltered(ctx context.Context, f ClassroomFilter, limit int) ([]Classroom, error) {
+// first. total is the number of matching rows before LIMIT, so callers can say
+// "N matched, here are M" instead of silently dropping the tail.
+func (s *Store) ListFiltered(ctx context.Context, f ClassroomFilter, limit int) ([]Classroom, int, error) {
 	where := ` WHERE 1=1`
 	var args []any
 	if f.Q != "" {
@@ -173,40 +180,55 @@ func (s *Store) ListFiltered(ctx context.Context, f ClassroomFilter, limit int) 
 		where += ` AND capacity >= ` + dbutil.Bind(&args, f.CapacityMin)
 	}
 	if limit < 1 {
-		limit = 50
+		limit = defaultListLimit
 	}
 	limitPH := dbutil.Bind(&args, limit)
+	// COUNT(*) OVER () is evaluated over the whole match before LIMIT, so the
+	// total costs no second round trip and cannot disagree with the page.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+columns+` FROM classrooms`+where+` ORDER BY capacity, id LIMIT `+limitPH, args...)
+		`SELECT `+columns+`, COUNT(*) OVER () FROM classrooms`+where+` ORDER BY capacity, id LIMIT `+limitPH, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list filtered classrooms: %w", err)
+		return nil, 0, fmt.Errorf("list filtered classrooms: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	classrooms := []Classroom{}
+	var total int64
 	for rows.Next() {
 		var c Classroom
-		if err := rows.Scan(&c.ID, &c.Name, &c.Building, &c.Capacity, &c.Type, &c.Floor, &c.Campus, &c.Status, &c.Description, &c.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan classroom: %w", err)
+		if err := rows.Scan(&c.ID, &c.Name, &c.Building, &c.Capacity, &c.Type, &c.Floor, &c.Campus, &c.Status, &c.Description, &c.CreatedAt, &total); err != nil {
+			return nil, 0, fmt.Errorf("scan classroom: %w", err)
 		}
 		classrooms = append(classrooms, c)
 	}
-	return classrooms, rows.Err()
+	return classrooms, int(total), rows.Err()
 }
 
-// ListAvailable returns classrooms with capacity >= capacityMin that are free
-// of any course session or active (pending/approved) booking overlapping the
-// period range [ps, pe] on the given date. The overlap predicate
+// AvailableFilter names the slot and the optional room filters for
+// ListAvailable.
+type AvailableFilter struct {
+	Date        string // "YYYY-MM-DD"
+	PeriodStart int
+	PeriodEnd   int
+	CapacityMin int    // capacity >=
+	Building    string // fuzzy contains on building
+	Type        string // exact type
+}
+
+// ListAvailable returns classrooms matching f that are free of any course
+// session or active (pending/approved) booking overlapping [PeriodStart,
+// PeriodEnd] on f.Date. The overlap predicate
 // (period_start <= pe AND period_end >= ps) mirrors booking.Store.conflicts
 // so the two cannot drift; the course_sessions/classroom_bookings cross-table
-// reads follow the same precedent as booking's conflict check.
-func (s *Store) ListAvailable(ctx context.Context, date string, ps, pe, capacityMin, limit int) ([]Classroom, error) {
+// reads follow the same precedent as booking's conflict check. total is the
+// full match count before LIMIT (COUNT(*) OVER ()), so the caller can report
+// "137 free, showing 80" without a second query.
+func (s *Store) ListAvailable(ctx context.Context, f AvailableFilter, limit int) ([]Classroom, int, error) {
 	if limit < 1 {
-		limit = 50
+		limit = defaultListLimit
 	}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+columns+` FROM classrooms
-		 WHERE status = $1 AND capacity >= $2
+	args := []any{StatusAvailable, f.CapacityMin, f.Date, f.PeriodEnd, f.PeriodStart, f.Date, f.PeriodEnd, f.PeriodStart}
+	where := ` WHERE status = $1 AND capacity >= $2
 		   AND NOT EXISTS (
 		       SELECT 1 FROM course_sessions cs
 		       WHERE cs.classroom_id = classrooms.id AND cs.date = $3
@@ -215,23 +237,32 @@ func (s *Store) ListAvailable(ctx context.Context, date string, ps, pe, capacity
 		       SELECT 1 FROM classroom_bookings cb
 		       WHERE cb.classroom_id = classrooms.id AND cb.date = $6
 		         AND cb.status IN ('pending','approved')
-		         AND cb.period_start <= $7 AND cb.period_end >= $8)
-		 ORDER BY capacity, id LIMIT $9`,
-		StatusAvailable, capacityMin, date, pe, ps, date, pe, ps, limit)
+		         AND cb.period_start <= $7 AND cb.period_end >= $8)`
+	if f.Building != "" {
+		where += ` AND building ILIKE ` + dbutil.Bind(&args, dbutil.LikePattern(dbutil.EscapeLike(f.Building)))
+	}
+	if f.Type != "" {
+		where += ` AND type = ` + dbutil.Bind(&args, f.Type)
+	}
+	limitPH := dbutil.Bind(&args, limit)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+columns+`, COUNT(*) OVER () FROM classrooms`+where+` ORDER BY capacity, id LIMIT `+limitPH,
+		args...)
 	if err != nil {
-		return nil, fmt.Errorf("list available classrooms: %w", err)
+		return nil, 0, fmt.Errorf("list available classrooms: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	classrooms := []Classroom{}
+	var total int64
 	for rows.Next() {
 		var c Classroom
-		if err := rows.Scan(&c.ID, &c.Name, &c.Building, &c.Capacity, &c.Type, &c.Floor, &c.Campus, &c.Status, &c.Description, &c.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan classroom: %w", err)
+		if err := rows.Scan(&c.ID, &c.Name, &c.Building, &c.Capacity, &c.Type, &c.Floor, &c.Campus, &c.Status, &c.Description, &c.CreatedAt, &total); err != nil {
+			return nil, 0, fmt.Errorf("scan classroom: %w", err)
 		}
 		classrooms = append(classrooms, c)
 	}
-	return classrooms, rows.Err()
+	return classrooms, int(total), rows.Err()
 }
 
 func (s *Store) GetByID(ctx context.Context, id int64) (Classroom, error) {
