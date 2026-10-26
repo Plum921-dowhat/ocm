@@ -2,8 +2,9 @@ FROM golang:1.27-alpine
 
 WORKDIR /app
 
-# Hot-reload during development
-RUN go install github.com/air-verse/air@latest
+# Hot-reload during development. Pinned: `@latest` re-resolves on every build,
+# so two builds of the same commit could ship different binaries.
+RUN go install github.com/air-verse/air@v1.67.4
 
 # Cache module downloads (no external deps yet, but ready for future use)
 COPY go.mod go.sum* ./

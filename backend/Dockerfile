@@ -10,7 +10,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server .
 
 # --- Runtime stage ---
-FROM alpine:3.20 AS runtime
+FROM alpine:3.24 AS runtime
 
 # Non-root user for the running process
 RUN adduser -D -u 10001 appuser

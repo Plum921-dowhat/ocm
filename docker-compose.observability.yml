@@ -24,7 +24,7 @@ services:
       METRICS_ADDR: :9091
 
   prometheus:
-    image: prom/prometheus:v3.13.3
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     volumes:
       - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -43,7 +43,7 @@ services:
       - --path.rootfs=/host
 
   loki:
-    image: grafana/loki:3.7.8
+    image: grafana/loki:3.7.9
     restart: unless-stopped
     volumes:
       - ./deploy/observability/loki/loki.yml:/etc/loki/local-config.yaml:ro
@@ -53,7 +53,7 @@ services:
   alloy:
     # Ships container stdout/stderr (Docker JSON logs) into Loki. Alloy is
     # Loki's supported collector; promtail is EOL since 2026-03.
-    image: grafana/alloy:v1.20.0
+    image: grafana/alloy:v1.21.2
     restart: unless-stopped
     depends_on:
       - loki
@@ -66,7 +66,7 @@ services:
       - /etc/alloy/config.alloy
 
   grafana:
-    image: grafana/grafana:13.2.2
+    image: grafana/grafana:13.2.4
     restart: unless-stopped
     ports:
       - "3000:3000"
