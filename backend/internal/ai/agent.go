@@ -69,6 +69,14 @@ type Agent struct {
 	courses    *course.Store
 	bookings   *booking.Store
 	subject    authz.Subject
+
+	// Turn-scoped regime snapshot: buildMessages loads it once for the
+	// system prompt and validSlot validates against the same copy, so the
+	// table the model was shown and the table enforcing its tool calls can
+	// never disagree mid-turn. Agents are built per request, so this needs
+	// no locking.
+	turnRegimes       []schedule.Regime
+	turnRegimesLoaded bool
 }
 
 func NewAgent(client *Client, classrooms *classroom.Store, regimes *schedule.Store,
@@ -85,16 +93,52 @@ func NewAgent(client *Client, classrooms *classroom.Store, regimes *schedule.Sto
 
 var weekdayNames = [...]string{"日", "一", "二", "三", "四", "五", "六"}
 
-func systemPrompt(now time.Time) string {
-	return "你是「" + brand.Name() + " 智慧教室管理系统」的 AI 助手，帮助教师查询教室、课表与空闲时段，并生成教室预约方案。" +
-		"今天是 " + now.Format("2006年01月02日") + " 星期" + weekdayNames[now.Weekday()] + "。" +
-		"请遵守以下规则：\n" +
+// systemPrompt builds the turn's system prompt. Besides the current date it
+// injects the bell-time regime table: the data is tiny, changes at term
+// granularity, and nearly every question needs it to translate 时段 wording
+// ("晚上") into concrete periods before any tool call — a tool round here
+// would be pure overhead.
+func systemPrompt(now time.Time, regimes []schedule.Regime) string {
+	var b strings.Builder
+	b.WriteString("你是「" + brand.Name() + " 智慧教室管理系统」的 AI 助手，帮助教师查询教室、课表与空闲时段，并生成教室预约方案。" +
+		"今天是 " + now.Format("2006年01月02日") + " 星期" + weekdayNames[now.Weekday()] + "。\n")
+	b.WriteString(regimeBlock(now, regimes))
+	b.WriteString("请遵守以下规则：\n" +
 		"1. 只能通过提供的工具查询真实数据，绝不编造任何数据；工具没有返回的信息一律视为不存在。\n" +
 		"2. 教室预约只能通过 propose_booking 工具生成「预约预览」，然后等待用户在界面上点击确认；你绝不能代替用户提交任何操作，也绝不能声称已经完成预约。\n" +
 		"3. 涉及相对日期（如“周一”“下周”）时，必须先换算成具体日期（YYYY-MM-DD）再调用工具，并在回答中写明。\n" +
-		"4. 节次必须与工具返回的作息制度核对，不要凭空假设节次对应的时间。\n" +
+		"4. 节次与时间以上方作息制度为准，不要凭空假设；涉及“上午”“下午”“晚上”等时段时，先按各节次的起止时间换算成具体节次区间再调用工具，工具会再次校验。\n" +
 		"5. 如果某个工具因为用户没有权限而失败，请如实告知用户缺少什么权限，不要编造数据替代。\n" +
-		"6. 回答使用中文，简洁准确；多项数据可用 Markdown 列表或表格呈现。"
+		"6. 回答使用中文，简洁准确；多项数据可用 Markdown 列表或表格呈现。")
+	return b.String()
+}
+
+// regimeBlock renders the regime table for the system prompt. All regimes are
+// listed — a conversation may reference dates across a regime switch — with
+// the one active today called out using the same schedule.ActiveFor rule the
+// tools validate against.
+func regimeBlock(now time.Time, regimes []schedule.Regime) string {
+	if len(regimes) == 0 {
+		return "当前系统未配置作息制度，涉及节次的查询会失败，请如实告知用户需由管理员先配置作息制度。\n"
+	}
+	var b strings.Builder
+	b.WriteString("作息制度（全校按各制度的生效起始日轮换，节次与时间以此为准）：\n")
+	for _, r := range regimes {
+		b.WriteString("- " + r.Name + fmt.Sprintf("（每年%d月%d日起生效）：", r.EffectiveMonth, r.EffectiveDay))
+		parts := make([]string, 0, len(r.Periods))
+		for _, p := range r.Periods {
+			parts = append(parts, fmt.Sprintf("第%d节 %s-%s", p.PeriodIndex, p.StartTime, p.EndTime))
+		}
+		if len(parts) == 0 {
+			b.WriteString("未配置节次")
+		} else {
+			b.WriteString(strings.Join(parts, "；"))
+		}
+		b.WriteString("\n")
+	}
+	active, _ := schedule.ActiveFor(regimes, now) // ok whenever regimes is non-empty
+	b.WriteString("今天生效的是「" + active.Name + "」。涉及其他日期时，请按上述生效日判断该日期适用哪套制度。\n")
+	return b.String()
 }
 
 // Definitions returns the OpenAI tool definitions for this turn. The tool set
@@ -212,12 +256,32 @@ func (a *Agent) runRounds(ctx context.Context, msgs []ChatMessage, roundCtx cont
 	}
 }
 
-func (a *Agent) buildMessages(history []Message) []ChatMessage {
-	msgs := []ChatMessage{{Role: "system", Content: systemPrompt(time.Now())}}
+// buildMessages assembles the system prompt and the client history. It loads
+// the regime table for the prompt here; validSlot reuses the same snapshot so
+// the model is never shown a regime the tools then reject. A regime load
+// failure fails open (no block in the prompt): tool-free chat still works,
+// and the tools query fresh when actually invoked.
+func (a *Agent) buildMessages(ctx context.Context, history []Message) []ChatMessage {
+	regimes, err := a.regimes.ListRegimes(ctx)
+	if err != nil {
+		logging.L.Error("ai load regimes for prompt", "err", err)
+	} else {
+		a.turnRegimes, a.turnRegimesLoaded = regimes, true
+	}
+	msgs := []ChatMessage{{Role: "system", Content: systemPrompt(time.Now(), regimes)}}
 	for _, m := range history {
 		msgs = append(msgs, ChatMessage{Role: m.Role, Content: m.Content})
 	}
 	return msgs
+}
+
+// regimesFor returns the turn's regime snapshot, falling back to a live query
+// when the prompt-time load failed.
+func (a *Agent) regimesFor(ctx context.Context) ([]schedule.Regime, error) {
+	if a.turnRegimesLoaded {
+		return a.turnRegimes, nil
+	}
+	return a.regimes.ListRegimes(ctx)
 }
 
 // consumeStream relays text deltas to the client and accumulates tool-call
@@ -585,7 +649,7 @@ func (a *Agent) validSlot(ctx context.Context, date string, ps, pe int) (schedul
 	if err != nil {
 		return schedule.Regime{}, "日期格式错误，请使用 YYYY-MM-DD。", false
 	}
-	regimes, err := a.regimes.ListRegimes(ctx)
+	regimes, err := a.regimesFor(ctx)
 	if err != nil {
 		return schedule.Regime{}, "", false
 	}

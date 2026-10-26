@@ -98,7 +98,7 @@ func (h *Handler) chat(w http.ResponseWriter, r *http.Request) {
 	// transport-level failures still answer as JSON (and audit as such).
 	ctx, cancel := context.WithTimeout(r.Context(), totalTimeout)
 	defer cancel()
-	msgs := agent.buildMessages(in.Messages)
+	msgs := agent.buildMessages(ctx, in.Messages)
 	roundCtx, roundCancel := context.WithTimeout(ctx, roundTimeout)
 	stream, err := client.StreamRequest(roundCtx, msgs, agent.Definitions())
 	if err != nil {
