@@ -2,7 +2,7 @@
 title: 项目结构
 ---
 
-单仓多端 + 文档站:Go 后端、微信小程序、Web 控制台、IoT 设备侧 SDK,共享一套设计 token(品牌色 `#2B5FF6`)。各目录的内部文件清单**以代码为准**,本页只到「目录 = 职责」粒度。
+单仓多端 + 文档站:Go 后端、微信小程序、Web 控制台、IoT 设备侧 SDK,共享一套设计 token(品牌色 `#2B5FF6`)。各目录的内部文件清单**以代码为准**,本页仅说明到「目录 = 职责」粒度。
 
 ```
 ocm/
@@ -27,7 +27,7 @@ ocm/
 
 ## `miniapp/` — 微信小程序
 
-TypeScript + glass-easel + TDesign,**默认 WebView** 渲染;顶部导航统一 `app-navbar`(TDesign Navbar),底部 tabBar 走微信原生。详见 [小程序](/guide/miniapp)。
+TypeScript + glass-easel + TDesign,**默认 WebView** 渲染;顶部导航统一使用 `app-navbar`(TDesign Navbar),底部 tabBar 使用微信原生实现。详见 [小程序](/guide/miniapp)。
 
 ## `web/` — Web 控制台
 

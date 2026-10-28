@@ -2,7 +2,7 @@
 title: 课表导入
 ---
 
-OCM 支持批量导入(**xlsx**)。导入是**异步**的:上传一个 `.xlsx` → 后端解析生成**预览(preview)** → 你**确认提交**后写库 → 前端轮询状态。本页说明 xlsx 契约、用法、8 种导入类型与教务处拆分流程。路由与权限起测试服务器看(开发环境挂 `/swagger/`),上传/提交/查询端点见下方「用法」。
+OCM 支持批量导入(**xlsx**)。导入是**异步**的:上传 `.xlsx` → 后端解析生成**预览(preview)** → 确认提交后写入数据库 → 前端轮询状态。本页说明 xlsx 契约、用法、8 种导入类型与教务处拆分流程。路由与权限可通过启动测试服务器查看(开发环境挂载 `/swagger/`),上传/提交/查询端点见下文「用法」。
 
 ## 通用规则(所有类型)
 
@@ -47,7 +47,7 @@ OCM 支持批量导入(**xlsx**)。导入是**异步**的:上传一个 `.xlsx` �
 2. 选 `.xlsx` 上传 → 接口返回 `202 { id, status: "pending" }`,后台开始解析。
 3. 解析完进入 `preview` 态,弹窗列出**将要写入的行**与逐行校验错误。
 4. **确认导入**(后端 `POST /api/imports/{id}/commit`)→ 重新校验并写库;或**取消**丢弃 preview。
-5. 页面每 3 秒轮询(仅 `pending`/`processing` 时),完成后显示总行数 / 成功 / 失败。`failedRows > 0` 时「查看明细」逐行列出错误,修正后重导失败行即可。
+5. 页面每 3 秒轮询(仅 `pending`/`processing` 时),完成后显示总行数 / 成功 / 失败。`failedRows > 0` 时「查看明细」逐行列出错误,修正后重新导入失败行即可。
 
 ### API
 
@@ -75,7 +75,7 @@ job 状态:`pending → processing → preview →(commit)→ succeeded/failed`;
 
 其他校验:数值列(学分/学时/节次等)须为合法数字;`sessions.note`、`bookings.purpose` 上限 255 字符。
 
-每个资源的 `GET /api/{resource}/export` 导出的 xlsx 表头与对应 importer 必需列对齐——**导出再改再回导**是准备文件的最快方式。
+每个资源的 `GET /api/{resource}/export` 导出的 xlsx 表头与对应 importer 必需列对齐——「导出—修改—回导」是准备文件最便捷的方式。
 
 ## 教务处课表拆分(jwc_split)
 
@@ -87,9 +87,9 @@ job 状态:`pending → processing → preview →(commit)→ succeeded/failed`;
 
 ## 从学校课表准备 xlsx
 
-若你的课表不是教务处聚合格式(无法用 jwc_split),需写一次性脚本把每次课提取成一行、列名符合上表。推荐 `openpyxl` 读 `.xlsx`,处理合并单元格(向合并范围填左上角值)、把钟点映射成节次区间 `period_start`/`period_end`(用 `GET /api/schedule/active?date=...` 查生效制度;连上的多节写起止节号)。
+若课表非教务处聚合格式(无法使用 jwc_split),需编写一次性脚本将每次课提取成一行、列名符合上表。推荐 `openpyxl` 读 `.xlsx`,处理合并单元格(向合并范围填左上角值)、将钟点映射为节次区间 `period_start`/`period_end`(用 `GET /api/schedule/active?date=...` 查生效制度;连上的多节写起止节号)。
 
-## 常见坑
+## 常见问题
 
 - **只收 xlsx**:`.csv`/`.xls` 不接受(后端 `excelize`,非 `encoding/csv`)。
 - **列名逐字一致**:小写,如 `teaching_class`(不是 `class`/`班级`);表头会被小写化 + 去空格后匹配。
@@ -98,4 +98,4 @@ job 状态:`pending → processing → preview →(commit)→ succeeded/failed`;
 - **文件内重复键**:教室重名、行政班重复(年级,名称)、课程库重码在文件内即拒绝,不静默覆盖。
 - **合并单元格**:表头和跨节课常见,转换时须向合并范围填充左上角值。
 - **冲突**:导入按「教室+日期+节次区间」检查重叠——与已有课次区间重叠、或与 `pending`/`approved` 教室预约区间重叠的行失败;文件内相互重叠的行同样报错。
-- **必须 commit**:`preview` 态不写库;不点「确认导入」job 会停在 preview。
+- **必须提交**:`preview` 状态不写库;若不点击「确认导入」,job 将停留在 preview 状态。

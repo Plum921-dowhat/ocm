@@ -3,15 +3,15 @@ title: 快速开始
 slug: /
 ---
 
-OCM = 智慧教室管理系统,三端一体:**Go 后端** + **微信小程序** + **Web 控制台**,外加 PostgreSQL 17。最快的方式是用 `docker compose` 一键起全栈。
+OCM 即智慧教室管理系统,三端一体:**Go 后端** + **微信小程序** + **Web 控制台**,外加 PostgreSQL 17。推荐使用 `docker compose` 一键启动全栈。
 
 ## 前置
 
-- **Docker**(推荐用 compose 一键起);或本地装 Go 1.27.3+、Node ≥ 20.19、PostgreSQL 17。
-- **微信开发者工具**(仅开发小程序时需要)。
-- 仓库根 `.env.example`:`cp .env.example .env`,按需填(开发可不填,用默认值;生产必填,见下)。
+- **Docker**(推荐以 compose 一键启动);或本地安装 Go 1.27.3+、Node ≥ 20.19、PostgreSQL 17。
+- **微信开发者工具**(仅在开发小程序时需要)。
+- 仓库根 `.env.example`:`cp .env.example .env`,按需填写(开发环境可不填,使用默认值;生产环境必填,见下文)。
 
-## 一键起全栈(推荐)
+## 一键启动全栈(推荐)
 
 ```bash
 git clone <repo> ocm && cd ocm
@@ -22,13 +22,13 @@ docker compose up -d            # postgres + backend(air 热更)+ web(vite)
 
 | 服务 | 地址 | 说明 |
 |------|------|------|
-| Web 控制台 | http://localhost:5173 | 登录用下方默认账号 |
+| Web 控制台 | http://localhost:5173 | 使用下方默认账号登录 |
 | 后端 API | http://localhost:8080 | `/api/...`;`/healthz`、`/readyz` |
 | PostgreSQL | localhost:5432 | 库 `ocm` / 用户 `ocm` / 密码 `ocm`(dev) |
 
-dev compose 用开发默认值:`JWT_SECRET` 空(后端用开发兜底密钥)、`ADMIN_PASSWORD` 空(后端用 `admin123`)。所以**不建 `.env` 也能跑开发栈**;但小程序登录需要 `WX_APP_ID`/`WX_APP_SECRET`(见下)。
+dev compose 使用开发默认值:`JWT_SECRET` 空(后端使用开发兜底密钥)、`ADMIN_PASSWORD` 空(后端使用 `admin123`)。因此**不创建 `.env` 也可运行开发栈**;但小程序登录需要 `WX_APP_ID`/`WX_APP_SECRET`(见下文)。
 
-**默认账号**:首次启动 `users` 表为空时种入管理员,用户名 `admin`,密码 = `ADMIN_PASSWORD`(开发默认 `admin123`)。用它在 http://localhost:5173 登录 Web 端。
+**默认账号**:首次启动且 `users` 表为空时种入管理员,用户名 `admin`,密码 = `ADMIN_PASSWORD`(开发默认 `admin123`)。使用该账号登录 http://localhost:5173 的 Web 端。
 
 ## 环境变量(.env)
 
@@ -38,7 +38,7 @@ compose 自动加载仓库根 `.env`。关键项:
 |------|------|------|------|
 | `JWT_SECRET` | 可空(兜底) | **必填** | HS256 签名密钥 |
 | `ADMIN_PASSWORD` | 可空(`admin123`) | **必填** | 种入 admin 的密码 |
-| `WX_APP_ID` / `WX_APP_SECRET` | 仅小程序需要 | 仅小程序需要 | code2Session;web-only 可留空(wx 端点会 502 直到配置) |
+| `WX_APP_ID` / `WX_APP_SECRET` | 仅小程序需要 | 仅小程序需要 | code2Session;仅使用 Web 端时可留空(未配置前 wx 端点返回 502) |
 | `DB_PASSWORD` | dev 固定(`ocm`) | **必填** | PostgreSQL 密码 |
 | `DB_SSLMODE` | `disable` | `disable` | PostgreSQL 连接的 TLS 模式;托管/跨主机部署用 `require` |
 | `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_LIFETIME` | `25` / `25` / `5m` | 连接池调优 |
@@ -50,13 +50,13 @@ compose 自动加载仓库根 `.env`。关键项:
 
 生产用 `docker-compose.prod.yml`,对 `DB_PASSWORD`/`JWT_SECRET`/`ADMIN_PASSWORD` 做 fail-fast(缺则拒启)。
 
-## 各端单独跑
+## 各端独立运行
 
 ### 后端(Go)
 
 ```bash
 cd backend
-APP_ENV=development go run .     # 或 air 热更
+APP_ENV=development go run .     # 或使用 air 热重载
 ```
 
 需 PostgreSQL 可达(`DB_HOST` 等默认指向 localhost:5432,dev 凭据 ocm/ocm)。`APP_ENV=development` 允许 `DB_HOST` 缺省回落 localhost;生产模式拒绝。
@@ -73,8 +73,8 @@ cd web && npm install && npm run dev     # http://localhost:5173
 
 1. 微信开发者工具打开 `miniapp/`(不是仓库根)。
 2.「工具 → 构建 npm」生成 `miniprogram_npm/`。
-3. 起后端(:8080)。开发者工具里 `envVersion=develop` 自动走 `http` → `http://localhost:8080`,无需改配置。
-4.「详情 → 本地设置 → 不校验合法域名」放行 localhost;真机把 `devConfig.baseUrl` 的 `localhost` 换局域网 IP。
+3. 启动后端(:8080)。开发者工具中 `envVersion=develop` 自动走 `http` → `http://localhost:8080`,无需修改配置。
+4.「详情 → 本地设置 → 不校验合法域名」放行 localhost;真机调试时将 `devConfig.baseUrl` 中的 `localhost` 替换为局域网 IP。
 
 详见 [小程序](/guide/miniapp)。
 

@@ -2,7 +2,7 @@
 title: 后端
 ---
 
-Go 后端(`module ocm-backend`,Go 1.27.3)。`net/http` ServeMux(Go 1.22+ 方法路由)+ **PostgreSQL 17**。本页只写**行为承诺与横切约定**——实现细节看代码注释,路由与参数起测试服务器看(开发环境挂 `/swagger/`,契约生成物在 `backend/docs/`)。
+Go 后端(`module ocm-backend`,Go 1.27.3)。`net/http` ServeMux(Go 1.22+ 方法路由)+ **PostgreSQL 17**。本页只记录**行为承诺与横切约定**——实现细节见代码注释;路由与参数可通过启动测试服务器查看(开发环境挂载 `/swagger/`,契约生成物位于 `backend/docs/`)。
 
 ## 数据库要求
 
@@ -16,14 +16,14 @@ Go 后端(`module ocm-backend`,Go 1.27.3)。`net/http` ServeMux(Go 1.22+ 方法�
 
 **时区**:数据库**不要求**特定 `TimeZone` 参数,也不要求服务器时区是 `Asia/Shanghai`。所有"瞬时"列都是 `timestamptz`,写入与读取的瞬间值与会话时区无关;后端启动时会把会话时区钉在 `Asia/Shanghai`(`internal/db` 的 DSN),纯粹是为了让 `psql`、`pg_dump`、服务端 `now()` 渲染成北京时间、与日志一致。
 
-列类型策略(四类时间数据):真瞬时 → `timestamptz`;日粒度 → `date`;钟面时刻 → `time`;循环规则(如"每周一第 1-2 节")→ 整数序号,绝不物化成瞬时值。**不使用** naive `timestamp`(无时区)——驱动会给它挂假标签,Go 侧比较会静默错 8 小时。详见 `AGENTS.md` 的时区契约。
+列类型策略(四类时间数据):真瞬时 → `timestamptz`;日粒度 → `date`;钟面时刻 → `time`;循环规则(如"每周一第 1-2 节")→ 整数序号,绝不物化成瞬时值。**不使用** naive `timestamp`(无时区)——驱动会为其附加错误时区标签,Go 侧比较会静默偏差 8 小时。详见 `AGENTS.md` 的时区契约。
 
 ## 本地运行
 
 | 方式 | 命令 | 说明 |
 |------|------|------|
 | 最简 | `cd backend && APP_ENV=development go run .` | 需 PostgreSQL 可达(默认 localhost:5432,ocm/ocm) |
-| 热更 | `cd backend && air` | `.air.toml`;`Dockerfile.dev` 即用此 |
+| 热重载 | `cd backend && air` | `.air.toml`;`Dockerfile.dev` 即使用此方式 |
 | 全栈 | `docker compose up -d`(仓库根) | postgres + backend(air) + web(vite) |
 
 `APP_ENV=development` 允许 `DB_HOST` 缺省回落 localhost;生产模式(默认)拒绝回落。连接池调优:`DB_MAX_OPEN_CONNS`/`DB_MAX_IDLE_CONNS`/`DB_CONN_MAX_LIFETIME`(默认 25/25/5m)。

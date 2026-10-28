@@ -1,6 +1,6 @@
 # Mosquitto 部署配置（OCM IoT）
 
-overlay `docker-compose.iot.yml` 用这里的一套配置启动 broker：
+overlay `docker-compose.iot.yml` 使用本目录的配置启动 broker：
 
 ```
 docker compose -f docker-compose.yml -f docker-compose.iot.yml up -d
@@ -32,6 +32,6 @@ ACL 模型即 `iot/spec/spec.md` §8 的安全基线。v1 用
 
 ## 注意
 
-- CI 的 e2e 用的是另一份匿名配置（`.github/mosquitto.conf`），与本目录
+- CI 的 e2e 使用另一份匿名配置（`.github/mosquitto.conf`），与本目录
   无关。
 - 本目录变更会触发 `backend.yml`（paths 含 `deploy/**`）。

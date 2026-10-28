@@ -1,9 +1,13 @@
 import type {Config} from '@docusaurus/types';
 
+// 对外发布时用环境变量注入真实地址，例如：
+//   DOCS_SITE_URL=https://docs.example.org npm run build
+const siteUrl = process.env.DOCS_SITE_URL ?? 'https://docs.example.com';
+
 const config: Config = {
   title: 'OCM',
   tagline: 'OCM is an open-source classroom management system.',
-  url: 'https://docs.zyang4418.cn',
+  url: siteUrl,
   baseUrl: '/',
   trailingSlash: false,
 

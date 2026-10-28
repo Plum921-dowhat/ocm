@@ -2,7 +2,7 @@
 
 > 本文档面向后续开发者，说明课程管理的数据模型与**设计理由**——重点是教学班
 > 这一层的引入背景。字段以建表 SQL 为准，路由以 OpenAPI 生成物为准，文件归属
-> 以代码为准；本文只写「为什么这样设计」与不易从代码直接看出的约束语义。
+> 以代码为准；本文仅记录「为什么这样设计」与不易从代码直接看出的约束语义。
 
 ## 1. 概述：课程三层结构
 
@@ -56,7 +56,7 @@ L2「开课」是承上启下的关键：它把一门抽象课程、一个学期
 
 ## 3. 数据表
 
-建表 SQL 以 `internal/user/org_store.go`（组织三表）与 `internal/course/store.go`（课程三表）的 `Migrate` 为准，此处不重复列字段。两个不易看出的语义：
+建表 SQL 以 `internal/user/org_store.go`（组织三表）与 `internal/course/store.go`（课程三表）的 `Migrate` 为准，此处不再重复列出字段。两个不易看出的语义：
 
 - **`course_catalog.code` 是身份键**（NOT NULL UNIQUE，教务处课程代码）：`name` 可重名（同名不同码是合法形态），导入器按 code upsert，开课/课次按 code 解析引用。课程库身份键曾经历 `name` → 可空 `code` → `code NOT NULL` 三个阶段，当前为最终形态；**部署新版本前必须删库重建**（`Migrate` 只 `CREATE IF NOT EXISTS`，不升级旧库），详见 `store.go` 中的警告注释。
 - **`course_sessions` 是节次区间** `[period_start, period_end]`：连上多节（如 3-4）是**一个课次实例**，不逐节展开；区间重叠无法用唯一索引表达，由应用层校验（见 §4）。
@@ -67,15 +67,15 @@ L2「开课」是承上启下的关键：它把一门抽象课程、一个学期
 - **教学班成员冻结**：教学班已被开课引用后，**不允许变更成员集合**（`ErrClassInUse`，HTTP 409），避免排课后成员变动导致课次归属语义错乱；改名/改备注仍可。删除被引用的教学班同理拒绝。
 - **行政班引用保护**：删除已被教学班引用的行政班返回 409，需先从教学班移除。
 - **教学班成员下限**：创建/更新教学班至少 1 个行政班成员（400）。
-- **课次重叠约束（应用层）**：创建/更新课次与预约都检查「与任一课次区间重叠、或与任一 pending/approved 预约区间重叠」，且在教室行 `FOR UPDATE` 锁下进行，防并发插入；导入器同样做区间重叠预检。
+- **课次重叠约束（应用层）**：创建/更新课次与预约都检查「与任一课次区间重叠、或与任一 pending/approved 预约区间重叠」，且在教室行 `FOR UPDATE` 锁下进行，以防止并发插入；导入器同样做区间重叠预检。
 - **教师必填**：开课的 `teacher` 必填（旧模型可空）。
 
 ## 5. 权限
 
-行政班/教学班挂独立权限 `admin_class:read/manage`、`teaching_class:read/manage`（`admin` 通配，普通 `user` 角色仅可读）；课程本体沿用 `course:read/manage`。权限链与目录见 `internal/authz`。
+行政班/教学班对应独立权限 `admin_class:read/manage`、`teaching_class:read/manage`（`admin` 通配，普通 `user` 角色仅可读）；课程本体沿用 `course:read/manage`。权限链与目录见 `internal/authz`。
 
 ## 6. 相关参考
 
 - 教务处聚合表拆分规则：`internal/importer/jwc/doc.go`
-- xlsx 导入契约（各类型必需列、校验规则）：文档站[课表导入](https://docs.zyang4418.cn/guide/import)与 `internal/importer/*.go` 的 `Col*` 常量
+- xlsx 导入契约（各类型必需列、校验规则）：文档站源文件 `docs/docs/guide/import.mdx`（课表导入）与 `internal/importer/*.go` 的 `Col*` 常量
 - API 路由与载荷：OpenAPI 生成物（`backend/docs/`），开发环境 `/swagger/` 可视化
