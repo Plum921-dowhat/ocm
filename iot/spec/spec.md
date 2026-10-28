@@ -37,7 +37,8 @@ iot/_meta/{sourceId}/{channel}                 源生命周期（无 site 段）
 - **topic 里只放稳定标识**：不放版本号（版本在载荷 `v` 字段）、不放教室、
   不放设备类型。教室绑定与类别是注册表数据，随管理面（REST）演进。
 - channel 取值：`state` / `event` / `cmd` / `ack`；meta 的 channel 见 §6。
-- topic 结构变更 = 新契约 = 换根（如 `iot2/`），事到临头再定，不预设版本段。
+- topic 结构变更即新契约，需更换根段（如 `iot2/`）；该决定待实际需要时作出，
+  当前不预设版本段。
 
 ## 3. QoS / retained 矩阵
 
@@ -83,7 +84,7 @@ queued → delivered → acked | failed
 ### 5.1 命令类型词表
 
 `type` 是平台与设备之间的受控词汇：后端在 API 入口按词表拒绝未知类型
-（typo 进不了 broker，审计词汇保持统一）；设备侧对不认识但仍到达的 type
+（拼写错误无法进入 broker，审计词汇保持统一）；设备侧对不认识但仍到达的 type
 一律回 `failed` ack——词表是词汇门，不是能力门。核心词表：
 
 | type | 寻址层级 | payload | 语义 |
@@ -118,9 +119,9 @@ queued → delivered → acked | failed
 ## 7. 断线缓冲政策
 
 - **state 只缓冲最新值**：源为每台设备保留最近一次 state，重连后自动重发
-  （retained）。历史 state 没有意义，不进队列。
+  （retained）。历史 state 不具保留价值，不进入队列。
 - **event/ack 走 FIFO 持久队列**：断线期间写入本地缓冲文件，重连后按序
-  补发；队列有容量上限（默认 10000 条），满则丢最旧。SDK（`iot/mqttc`）
+  补发；队列有容量上限（默认 10000 条），队列满时丢弃最旧记录。SDK（`iot/mqttc`）
   已实现该语义，设备侧程序建议直接复用。
 - 后端侧：clean session 关闭 + QoS1 订阅，后端重启期间 broker 代为排队。
 
@@ -179,5 +180,5 @@ queued → delivered → acked | failed
   上，`data.function` 携带功能键；节点域事件（如控制器连接断开）不带。
   事件只属于真实翻转/发生，节点重连后的首包状态回读只入属性、不发事件。
 - **认领与台账**：节点实体按 pending→approve 流程认领一次；外围的型号/
-  SN/安装位/更换记录等功能语义的家在台账（管理面数据，随管理面演进），
-  不进 topic、不做运行时发现。
+  SN/安装位/更换记录等功能语义归属台账（管理面数据，随管理面演进），
+  不进入 topic，也不做运行时发现。

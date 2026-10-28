@@ -4,15 +4,15 @@ title: 可观测性
 
 # 可观测性
 
-OCM 的可观测性按「**信号层归上游、消费层跟部署情景走、交付层归交付方**」分层：
+OCM 的可观测性按「**信号层归上游、消费层随部署情景而定、交付层归交付方**」分层：
 
 - **信号层**（上游，部署无关）：后端暴露 Prometheus 格式的 `/metrics` 端点
   （RED 请求指标 + Go 运行时 + DB 连接池）、结构化 JSON 日志（stdout）、
   `/healthz` 与 `/readyz` 探针、以及每个响应携带的 `X-Request-ID`。
-- **消费层**（跟部署情景走）：Docker Compose 情景用参考监控栈 overlay
-  （本文档）；Serverless 云原生情景没有 node_exporter/Prometheus 守护进程
-  的生存空间，信号层交给平台托管监控消费——平台收 stdout 日志、探
-  healthz、抓 `/metrics`。
+- **消费层**（随部署情景而定）：Docker Compose 情景使用参考监控栈 overlay
+  （本文档）；Serverless 云原生情景不适用 node_exporter/Prometheus 守护进程，
+  信号层交由平台托管监控消费——平台收集 stdout 日志、探测
+  healthz、抓取 `/metrics`。
 - **交付层**（归交付方）：面板调优、告警路由、runbook、运维账号，每个
   部署站点各不相同。
 
@@ -25,7 +25,7 @@ OCM 的可观测性按「**信号层归上游、消费层跟部署情景走、�
 | `METRICS_ADDR` | 未设即关闭 | `/metrics` 独立监听地址（如 `:9091`） |
 
 - **独立 mux、独立监听**：`/metrics` 不在业务 mux 上，第二个监听器永远
-  不会误暴露业务路由；监听失败只记日志，不拖垮 API 主服务。
+  不会误暴露业务路由；监听失败仅记录日志，不影响 API 主服务。
 - 暴露内容（Prometheus 文本格式）：
   - `http_requests_total{method,path,status}` — RED 的 R/E，`path` 是
     ServeMux 路由 pattern（如 `GET /api/roles/{id}`），不是原始 URL，
@@ -67,26 +67,26 @@ docker compose -f docker-compose.prod.yml -f docker-compose.observability.yml up
 | alloy | grafana/alloy:v1.20.0 | 容器日志采集进 Loki | 无 |
 
 - 配置都在 `deploy/observability/`（见其 README）。
-- Grafana 开箱即用「OCM 服务状态总览」面板：服务在线、请求速率、5xx、
+- Grafana 预置「OCM 服务状态总览」面板：服务在线、请求速率、5xx、
   p95 延迟、CPU/内存/磁盘、DB 连接池、最近后端错误日志（反馈流程：
-  复制日志行里的 `request_id` 反馈给开发）。
+  复制日志行中的 `request_id` 反馈给开发）。
 - `GRAFANA_ADMIN_PASSWORD` 必填（`.env` 或环境变量），缺省拒绝启动。
 
 ## 安全基线
 
 1. **只有 Grafana 对外**。`/metrics`、node-exporter、prometheus、loki
    仅 compose 内网可达，不得发布宿主机端口。
-2. Grafana 强密码 + HTTPS 反向代理之后交付；运维角色视为只读（重启等
-   维护动作走 runbook，不开面板权限）。
+2. 交付前须为 Grafana 设置强密码，并置于 HTTPS 反向代理之后；运维角色视为只读（重启等
+   维护动作按 runbook 执行，不开放面板权限）。
 3. 面板不接 system_logs 业务审计（含学生数据）；错误日志面板只看
    stdout 运行日志（method/path/status/user 登录名，无业务数据）。
-4. 监控栈独立于被监控对象存活：backend 全挂时，主机指标、探针状态、
-   `up == 0` 告警照常工作。
+4. 监控栈独立于被监控对象存活：backend 全部故障时，主机指标、探针状态、
+   `up == 0` 告警仍正常工作。
 
 ## 为什么不是 OpenTelemetry
 
 单进程架构（MQTT 消费者是进程内 goroutine）没有跨进程 trace 需求；
-`/metrics` 直出 Prometheus 是移动部件最少的方案。拆出第二个常驻进程
-（如独立部署的 worker/consumer）之日，才是引入 OTel collector 之时——
-届时 OTLP → collector → Prometheus，`/metrics` 端点与本 overlay 的面板
-原样保留，只是数据来源多一条管道。
+`/metrics` 直出 Prometheus 是所需组件最少的方案。只有在拆出第二个常驻进程
+（如独立部署的 worker/consumer）时，才需要引入 OTel collector——届时采用
+OTLP → collector → Prometheus，`/metrics` 端点与本 overlay 的面板保持不变，
+仅数据来源多一条管道。

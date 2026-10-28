@@ -1,6 +1,6 @@
 # Observability 部署配置（参考监控栈）
 
-overlay `docker-compose.observability.yml` 用这里的一套配置启动监控栈：
+overlay `docker-compose.observability.yml` 使用本目录的配置启动监控栈：
 
 ```
 docker compose -f docker-compose.yml      -f docker-compose.observability.yml up -d   # dev
@@ -17,7 +17,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.observability.yml up
 - `alloy/config.alloy` — 容器日志采集进 Loki（Docker JSON 日志，
   `container` 标签取短容器名）。Alloy 是 Loki 的受支持采集器，
   promtail 已于 2026-03 EOL。
-- `grafana/provisioning/` — 数据源（Prometheus + Loki）与开箱即用的
+- `grafana/provisioning/` — 数据源（Prometheus + Loki）与预置的
   「OCM 服务状态总览」面板（RED 指标、主机资源、DB 连接池、错误日志），
   uid 固定：`ocm-prometheus` / `ocm-loki` / `ocm-overview`。
 
@@ -25,7 +25,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.observability.yml up
 
 - 只有 Grafana 发布端口（`:3000`）；backend `/metrics`、node-exporter、
   prometheus、loki 全部仅 compose 内网可达，**不得**发布到宿主机。
-- `GRAFANA_ADMIN_PASSWORD` 必填（缺省拒绝启动），交付前必须换强密码，
+- `GRAFANA_ADMIN_PASSWORD` 必填（缺省拒绝启动），交付前必须更换为强密码，
   建议置于 HTTPS 反向代理之后。
 - 信号层端点无鉴权是设计使然（依赖网络隔离），见
   docs/docs/guide/observability.mdx。

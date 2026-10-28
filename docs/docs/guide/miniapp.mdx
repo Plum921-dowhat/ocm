@@ -35,7 +35,7 @@ title: 小程序
 
 ### 自托管(非微信云)
 
-仅改配置、不改代码:把 `FORCE_TRANSPORT` 设为 `'http'`,并把 `devConfig.baseUrl` 改成你的后端地址(无尾斜杠)。`localhost` 需在开发者工具勾选「详情 → 本地设置 → 不校验合法域名」;真实域名需加入微信「request 合法域名」白名单。身份机制(`wx.login`/`code2Session`)非云专属,自托管同样可用。
+仅改配置、不改代码:把 `FORCE_TRANSPORT` 设为 `'http'`,并把 `devConfig.baseUrl` 修改为自身后端地址(无尾斜杠)。`localhost` 需在开发者工具勾选「详情 → 本地设置 → 不校验合法域名」;真实域名需加入微信「request 合法域名」白名单。身份机制(`wx.login`/`code2Session`)非云专属,自托管同样可用。
 
 ## 请求层
 
@@ -82,9 +82,9 @@ title: 小程序
 ## 本地运行
 
 1. 微信开发者工具打开 `miniapp/` 目录(小程序工程根是 `miniapp/`,不是仓库根)。
-2. Appid 在 `project.config.json`(现填 `wx1d0666f34a25b850`;无权限则换成你自己的)。
+2. AppID 位于 `project.config.json`(当前为 `wx1d0666f34a25b850`;若不具备该 AppID 权限,应替换为自有 AppID)。
 3. 「工具 → 构建 npm」生成 `miniprogram_npm/`。
-4. 起后端(默认 `:8080`;见 [快速开始](/))。
-5. 开发者工具里 `envVersion === 'develop'` 自动走 `http` → `http://localhost:8080`,**无需改任何配置**。
-6. 「详情 → 本地设置 → 不校验合法域名」放行 localhost;真机 Wi-Fi 调试把 `devConfig.baseUrl` 的 `localhost` 换成局域网 IP。
-7. 测云端传输:设 `FORCE_TRANSPORT = 'callContainer'` 并在 `prodConfig` 填真实 `cloudEnv`/`serviceName`。
+4. 启动后端(默认 `:8080`;见 [快速开始](/))。
+5. 开发者工具中 `envVersion === 'develop'` 自动走 `http` → `http://localhost:8080`,**无需修改任何配置**。
+6. 「详情 → 本地设置 → 不校验合法域名」放行 localhost;真机 Wi-Fi 调试时将 `devConfig.baseUrl` 中的 `localhost` 替换为局域网 IP。
+7. 测试云端传输时:设置 `FORCE_TRANSPORT = 'callContainer'`,并在 `prodConfig` 中填入真实 `cloudEnv`/`serviceName`。

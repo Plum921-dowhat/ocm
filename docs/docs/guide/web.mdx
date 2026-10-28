@@ -20,7 +20,7 @@ Web 控制台。React 19 + Vite + **Ant Design**,TypeScript strict 全量。前�
 | `dev` | `vite` | 开发服务器(:5173) |
 | `build` | `tsc --noEmit && vite build` | 生产构建(含类型门禁) |
 | `preview` | `vite preview` | 预览构建产物 |
-| `typecheck` | `tsc --noEmit` ×2 | 类型门禁(必须全绿) |
+| `typecheck` | `tsc --noEmit` ×2 | 类型门禁(必须全部通过) |
 | `gen:types` | swagger → openapi-typescript | 后端契约变更后重新生成 `src/types/api.d.ts` |
 
 ## 本地运行
@@ -39,7 +39,7 @@ npm run dev          # http://localhost:5173
 
 ## 鉴权
 
-- 登录:`POST /api/auth/login` → `{token, user}` 存 `localStorage`(键 `ocm.token`);启动水合调 `GET /api/auth/me`,401 弃 token,5xx/网络错误保留 token。
+- 登录:`POST /api/auth/login` → `{token, user}` 存 `localStorage`(键 `ocm.token`);应用启动时调用 `GET /api/auth/me` 完成状态恢复,401 时丢弃 token,5xx/网络错误保留 token。
 - **无 refresh token**;会话中遇 401 不自动登出。
 - token 每次请求附 `Authorization: Bearer <token>`,无全局拦截器。
 
